@@ -1,0 +1,28 @@
+{
+  "name": "earner-feed",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "@x402/core": "2.28.0",
+    "@x402/evm": "2.28.0",
+    "@x402/svm": "2.28.0",
+    "@x402/hono": "2.28.0",
+    "@x402/paywall": "2.28.0",
+    "@payai/facilitator": "2.4.4",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260925.1",
+    "typescript": "7.0.2",
+    "wrangler": "4.140.0"
+  },
+  "allowScripts": {
+    "workerd@1.20260923.1": true
+  }
+}

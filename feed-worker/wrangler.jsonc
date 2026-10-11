@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "earner-feed",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    // Receive-only addresses. The worker never holds keys.
+    "PAY_TO_EVM": "0x8789D337959D25d4776869494a0537F6f2e2BBae",
+    "PAY_TO_SOLANA": "4px5eCg2hVXzFY4jguRQmQ4YUyJ5pXPPLJGPnHba6GLg",
+    "PRICE_USD": "0.01",
+    "EVM_NETWORK": "eip155:8453",
+    "SOLANA_NETWORK": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+  },
+  "kv_namespaces": [
+    // Created by `npm run setup` (scripts/setup.ps1); the id is filled in there.
+    { "binding": "FEED", "id": "9780b8ddca354129a6c859a81a1d8340" }
+  ]
+}

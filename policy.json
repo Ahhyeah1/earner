@@ -1,0 +1,31 @@
+{
+  "_comment": "YOUR rules. The agent reads this file and never writes it. It sets its own budget only by applying these formulas to money it has actually earned.",
+
+  "allow_auto_submit": true,
+  "allow_live_trading": false,
+
+  "bootstrap_llm_usd": 5.0,
+
+  "tiers": [
+    {"name": "bootstrap",   "min_profit_usd": 0,    "reinvest_pct": 0.0,  "trading_pct": 0.0,  "unlocks": ["agent_bounties", "paper_trading"]},
+    {"name": "self-funded", "min_profit_usd": 50,   "reinvest_pct": 0.30, "trading_pct": 0.0,  "unlocks": ["agent_bounties", "paper_trading", "llm_from_profit"]},
+    {"name": "trader",      "min_profit_usd": 300,  "reinvest_pct": 0.30, "trading_pct": 0.25, "unlocks": ["agent_bounties", "paper_trading", "llm_from_profit", "live_trading"]},
+    {"name": "scaled",      "min_profit_usd": 2000, "reinvest_pct": 0.40, "trading_pct": 0.35, "unlocks": ["agent_bounties", "paper_trading", "llm_from_profit", "live_trading"]}
+  ],
+
+  "hard_caps": {
+    "max_llm_usd_per_day": 3.0,
+    "max_submissions_per_day": 3,
+    "max_micro_jobs_per_day": 10,
+    "max_trading_capital_usd": 1000,
+    "max_trade_usd": 100,
+    "max_daily_trading_loss_usd": 30,
+    "trading_kill_drawdown_pct": 20
+  },
+
+  "live_trading_gate": {
+    "min_paper_days": 30,
+    "min_paper_return_pct": 0.0,
+    "max_paper_drawdown_pct": 15.0
+  }
+}

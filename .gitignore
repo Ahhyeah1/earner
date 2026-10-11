@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+data/
+episodes/
+feed-worker/node_modules/
+grant/
+logs/
+reports/
+work/
