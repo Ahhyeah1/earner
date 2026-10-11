@@ -108,6 +108,8 @@ def state():
                                                                        "why", "probe")}}
                       for r in store.ideas()],
             "last_discovery": store.kv_get("last_discovery"),
+            "meme": {"book": store.kv_get("paper_meme") or {"open": {}, "closed": []},
+                     "last_scan": store.kv_get("paper_meme_last_scan")},
         }
     finally:
         store.db.close()

@@ -155,6 +155,13 @@ details summary { cursor: pointer; color: var(--ink-2); font-weight: 600; font-s
     </div>
   </div>
 
+  <div class="card section">
+    <h2>Meme coin paper trading <span class="muted" style="font-weight:400">· virtual money only, never real trades</span></h2>
+    <dl class="kv" id="meme-kv" style="margin-bottom:10px"></dl>
+    <div class="scroll"><table><thead><tr><th>Token</th><th>Status</th><th>Opened</th><th class="num">Cost</th>
+      <th class="num">Value / proceeds</th><th class="num">P&amp;L</th><th>Note</th></tr></thead><tbody id="t-meme"></tbody></table></div>
+  </div>
+
   <div class="grid main section">
     <div class="card">
       <h2>Agent activity</h2>
@@ -400,6 +407,29 @@ function render(S) {
     el("td", { class: "num", text: o.score }),
     el("td", {}, el("a", { href: o.url, target: "_blank", rel: "noopener", text: o.title })),
     el("td", { class: "why", text: o.reasons.join(" · ") }))));
+
+  // meme paper book
+  const MB = (S.meme && S.meme.book) || { open: {}, closed: [] }, MS = st.paper_meme || {}, scan = S.meme && S.meme.last_scan;
+  const rej = scan && scan.rejected ? Object.entries(scan.rejected).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(", ") : "—";
+  $("meme-kv").replaceChildren(
+    el("dt", { text: "Virtual equity" }), el("dd", { class: (MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "",
+      text: MS.equity != null ? `${usd(MS.equity, 2)} (${MS.return_pct >= 0 ? "+" : ""}${MS.return_pct}%) of $1,000` : "first scan pending" }),
+    el("dt", { text: "Trades" }), el("dd", { text: `${MS.open_positions || 0} open · ${MS.trades_closed || 0} closed · win rate ${MS.win_rate == null ? "—" : Math.round(MS.win_rate * 100) + "%"}` }),
+    el("dt", { text: "Last scan" }), el("dd", { text: scan ? `${when(scan.time)} UTC · ${scan.with_pairs} tokens checked, ${scan.passed_market_filters} passed market filters` : "—" }),
+    el("dt", { text: "Main rejections" }), el("dd", { text: rej }));
+  const mrows = [
+    ...Object.entries(MB.open).map(([m, p]) => ({ sym: p.symbol, url: p.url, status: "open", opened: p.opened, cost: p.cost, val: p.value ?? p.cost, note: `momentum ${p.score}` })),
+    ...MB.closed.slice().reverse().map((t) => ({ sym: t.symbol, url: t.url, status: "closed", opened: t.opened, cost: t.cost, val: t.proceeds, note: t.reason })),
+  ];
+  $("t-meme").replaceChildren(...(mrows.length ? mrows.map((r) => {
+    const pnl = r.val - r.cost;
+    return el("tr", {},
+      el("td", {}, r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener", text: r.sym }) : r.sym),
+      el("td", { text: r.status }), el("td", { class: "when", text: when(r.opened) }),
+      el("td", { class: "num", text: usd(r.cost, 2) }), el("td", { class: "num", text: usd(r.val, 2) }),
+      el("td", { class: "num " + (pnl > 0 ? "pos" : pnl < 0 ? "neg" : ""), text: usd(pnl, 2) }),
+      el("td", { class: "why", text: r.note }));
+  }) : [el("tr", {}, el("td", { colspan: 7, class: "muted", text: "No meme trades yet. The scanner runs every 2 hours and only buys tokens that pass every safety filter." }))]));
 
   // discovered ideas
   $("disc-when").textContent = S.last_discovery ? `· last research ${when(S.last_discovery)} UTC, runs weekly` : "· first research runs automatically this week";
