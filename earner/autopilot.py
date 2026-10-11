@@ -52,6 +52,23 @@ def scout(store, ts, log=print):
     return len(opps), new
 
 
+WATCHED_GRANT = "agentic-engineering"
+
+
+def watch_grant(store, fetch=None):
+    """The grant application is ready in grant/; tell the owner when the listing accepts applications."""
+    if store.kv_get("grant_submitted"):
+        return None
+    try:
+        d = fetch() if fetch else sources._get_json(f"https://earn.superteam.fun/api/grants/{WATCHED_GRANT}")
+    except Exception:
+        return None
+    if d.get("isPaused") or not d.get("isActive", True) or d.get("status") != "OPEN":
+        return None
+    return ("GRANT OPEN: Superteam 'Agentic Engineering Grants' accepts applications again - your "
+            "application is ready in grant/APPLICATION-agentic-engineering.md")
+
+
 def _acquire_lock():
     LOCK.parent.mkdir(exist_ok=True)
     if LOCK.exists() and time.time() - LOCK.stat().st_mtime < LOCK_STALE_SECONDS:
@@ -91,6 +108,9 @@ def _cycle(store, log):
 
     total, new = scout(store, ts, log)
     last_action = f"scouted {total} opportunities ({new} new)"
+    grant_note = watch_grant(store)
+    if grant_note:
+        notes.append(grant_note)
     if feed.configured():
         try:
             log(f"  paid feed: published {feed.publish(feed.build(store))} items")
