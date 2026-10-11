@@ -14,6 +14,8 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { createFacilitatorConfig } from "@payai/facilitator";
+import { createPaywall } from "@x402/paywall";
+import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
   FEED: KVNamespace;
@@ -107,7 +109,11 @@ app.use("/v1/opportunities", async (c, next) => {
         },
       },
       server,
-      { appName: "earner feed", testnet: !env.EVM_NETWORK.endsWith(":8453") },
+      undefined,
+      // Browsers get a wallet page (Phantom etc.) to pay in USDC on Solana; agents read the 402 headers.
+      createPaywall().withNetwork(svmPaywall)
+        .withConfig({ appName: "earner feed", testnet: !env.SOLANA_NETWORK.endsWith("5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp") })
+        .build(),
     );
   }
   return payment(c, next);
