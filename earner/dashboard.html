@@ -209,7 +209,15 @@ details summary { cursor: pointer; color: var(--ink-2); font-weight: 600; font-s
 const $ = (id) => document.getElementById(id);
 const usd = (v, d) => (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString(undefined,
   { minimumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0), maximumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0) });
-const when = (ts) => ts ? ts.replace("T", " ").slice(0, 16) : "";
+// All stored times are UTC; show them in Stockholm time (handles summer/winter time).
+const STHLM = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit",
+  day: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (ts) => {
+  if (!ts) return "";
+  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z";   // no offset stored -> it is UTC
+  const d = new Date(iso);
+  return isNaN(d) ? ts.replace("T", " ").slice(0, 16) : STHLM.format(d);
+};
 function el(tag, props, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -306,7 +314,7 @@ let last = null, moneyTab = "income", oppTab = "work";
 function render(S) {
   last = S;
   const st = S.status || {}, T = S.treasury, task = S.task || {};
-  $("sub").textContent = `${S.agent.username ? "Superteam agent " + S.agent.username + " · " : ""}last cycle ${when(st.time) || "never"} UTC`;
+  $("sub").textContent = `${S.agent.username ? "Superteam agent " + S.agent.username + " · " : ""}last cycle ${when(st.time) || "never"} (Stockholm)`;
 
   // health + schedule
   const errs = (st.notes || []).some((n) => /error/i.test(n));
@@ -415,7 +423,7 @@ function render(S) {
     el("dt", { text: "Virtual equity" }), el("dd", { class: (MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "",
       text: MS.equity != null ? `${usd(MS.equity, 2)} (${MS.return_pct >= 0 ? "+" : ""}${MS.return_pct}%) of $1,000` : "first scan pending" }),
     el("dt", { text: "Trades" }), el("dd", { text: `${MS.open_positions || 0} open · ${MS.trades_closed || 0} closed · win rate ${MS.win_rate == null ? "—" : Math.round(MS.win_rate * 100) + "%"}` }),
-    el("dt", { text: "Last scan" }), el("dd", { text: scan ? `${when(scan.time)} UTC · ${scan.with_pairs} tokens checked, ${scan.passed_market_filters} passed market filters` : "—" }),
+    el("dt", { text: "Last scan" }), el("dd", { text: scan ? `${when(scan.time)} · ${scan.with_pairs} tokens checked, ${scan.passed_market_filters} passed market filters` : "—" }),
     el("dt", { text: "Main rejections" }), el("dd", { text: rej }));
   const mrows = [
     ...Object.entries(MB.open).map(([m, p]) => ({ sym: p.symbol, url: p.url, status: "open", opened: p.opened, cost: p.cost, val: p.value ?? p.cost, note: `momentum ${p.score}` })),
@@ -432,7 +440,7 @@ function render(S) {
   }) : [el("tr", {}, el("td", { colspan: 7, class: "muted", text: "No meme trades yet. The scanner runs every 2 hours and only buys tokens that pass every safety filter." }))]));
 
   // discovered ideas
-  $("disc-when").textContent = S.last_discovery ? `· last research ${when(S.last_discovery)} UTC, runs weekly` : "· first research runs automatically this week";
+  $("disc-when").textContent = S.last_discovery ? `· last research ${when(S.last_discovery)}, runs weekly` : "· first research runs automatically this week";
   const ideas = S.ideas || [];
   $("t-ideas").replaceChildren(...(ideas.length ? ideas.map((i) => {
     const decision = i.status === "proposed"
