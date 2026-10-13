@@ -10,7 +10,7 @@ from collections import defaultdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import paper, policy
+from . import memory, paper, policy
 from .autopilot import ROOT, STATUS
 from .store import Store
 
@@ -108,6 +108,16 @@ def state():
                                                                        "why", "probe")}}
                       for r in store.ideas()],
             "last_discovery": store.kv_get("last_discovery"),
+            "memory": {
+                "lessons": _rows(store.db.execute("SELECT ts, topic, text FROM memories WHERE active=1 AND kind='lesson' ORDER BY id DESC LIMIT 20")),
+                "adjustments": _rows(store.db.execute("SELECT ts, topic, text FROM memories WHERE kind='adjustment' ORDER BY id DESC LIMIT 20")),
+                "observations": _rows(store.db.execute("SELECT ts, topic, text FROM memories WHERE kind='observation' ORDER BY id DESC LIMIT 40")),
+                "reflection": (_rows(store.db.execute("SELECT ts, text FROM memories WHERE kind='reflection' ORDER BY id DESC LIMIT 1")) or [None])[0],
+                "last_reflection": store.kv_get("last_reflection"),
+                "params": memory.params(store),
+                "bounds": {k: {"min": lo, "max": hi, "default": d} for k, (lo, hi, d) in memory.BOUNDS.items()},
+                "paused": memory.paused(store),
+            },
             "meme": {"book": store.kv_get("paper_meme") or {"open": {}, "closed": []},
                      "last_scan": store.kv_get("paper_meme_last_scan")},
         }
@@ -139,6 +149,23 @@ class Handler(BaseHTTPRequestHandler):
         # Custom header = a cross-site page can't trigger these with a plain form post.
         if self.headers.get("X-Earner") != "1":
             return self._send(403, {"error": "forbidden"})
+        if self.path.startswith("/api/strategy/") and self.path.endswith("/resume"):
+            name = self.path.split("/")[3]
+            st = Store(DB)
+            try:
+                ok = memory.resume(st, name)
+                st.commit()
+            finally:
+                st.db.close()
+            return self._send(200 if ok else 404, {"ok": ok})
+        if self.path == "/api/tuning/reset":
+            st = Store(DB)
+            try:
+                memory.reset_tuning(st)
+                st.commit()
+            finally:
+                st.db.close()
+            return self._send(200, {"ok": True})
         if self.path.startswith("/api/idea/"):
             parts = self.path.split("/")          # /api/idea/<id>/<approve|reject>
             if len(parts) != 5 or parts[4] not in ("approve", "reject"):

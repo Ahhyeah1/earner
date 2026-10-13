@@ -4,220 +4,294 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Earner Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
   color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f3f2ee;
-  --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --series-1: #2a78d6; --series-1-wash: rgba(42,120,214,0.10); --track: #cde2fb;
-  --good: #0ca30c; --good-ink: #006300; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
-  --bad-ink: #b42323;
+  --page: #fbf7ff; --page-2: #f2ecff; --surface: #ffffff; --surface-2: #f6f1fd; --surface-3: #efe7fb;
+  --ink: #241a3a; --ink-2: #5c4f78; --muted: #8d82a6; --grid: #ebe3f7; --axis: #d3c7e8;
+  --border: rgba(80, 50, 140, 0.12); --shadow: 0 6px 24px rgba(110, 70, 190, 0.10);
+  --accent: #7c5cff; --accent-2: #ff7eb6; --accent-wash: rgba(124, 92, 255, 0.10); --accent-ink: #ffffff;
+  --series-1: #2a78d6; --series-1-wash: rgba(42,120,214,0.10); --track: #e4dcf7;
+  --good: #0ca30c; --good-ink: #006300; --warning: #fab219; --critical: #d03b3b; --bad-ink: #b42323;
+  --skin: #ffe3d3; --hair: #6b4fd8; --hair-2: #8c74ff; --eye: #3a2a6e; --blush: #ff9ec4; --outfit: #ffffff; --outfit-2: #c9b8ff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
-    --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --series-1: #3987e5; --series-1-wash: rgba(57,135,229,0.16); --track: rgba(57,135,229,0.20);
-    --good-ink: #0ca30c; --bad-ink: #e66767;
+    --page: #120d24; --page-2: #1a1233; --surface: #1d1638; --surface-2: #251c45; --surface-3: #2d2353;
+    --ink: #f4efff; --ink-2: #c8bce8; --muted: #9284b8; --grid: #2c2350; --axis: #3d3266;
+    --border: rgba(200, 180, 255, 0.12); --shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+    --accent: #9a82ff; --accent-2: #ff8cc0; --accent-wash: rgba(154, 130, 255, 0.16);
+    --series-1: #3987e5; --series-1-wash: rgba(57,135,229,0.16); --track: #34295f;
+    --good-ink: #0ca30c; --bad-ink: #e66767; --outfit: #e9e2ff; --outfit-2: #8f7bf0;
   }
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
-  --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-  --series-1: #3987e5; --series-1-wash: rgba(57,135,229,0.16); --track: rgba(57,135,229,0.20);
-  --good-ink: #0ca30c; --bad-ink: #e66767;
+  --page: #120d24; --page-2: #1a1233; --surface: #1d1638; --surface-2: #251c45; --surface-3: #2d2353;
+  --ink: #f4efff; --ink-2: #c8bce8; --muted: #9284b8; --grid: #2c2350; --axis: #3d3266;
+  --border: rgba(200, 180, 255, 0.12); --shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+  --accent: #9a82ff; --accent-2: #ff8cc0; --accent-wash: rgba(154, 130, 255, 0.16);
+  --series-1: #3987e5; --series-1-wash: rgba(57,135,229,0.16); --track: #34295f;
+  --good-ink: #0ca30c; --bad-ink: #e66767; --outfit: #e9e2ff; --outfit-2: #8f7bf0;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-a { color: var(--series-1); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.wrap { max-width: 1240px; margin: 0 auto; padding: 20px 16px 48px; }
-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 18px; }
-header h1 { font-size: 20px; margin: 0; font-weight: 650; }
-.sub { color: var(--muted); font-size: 12.5px; }
-.spacer { flex: 1; }
-button { font: inherit; font-size: 13px; padding: 7px 14px; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--surface); color: var(--ink); }
-button:hover { background: var(--surface-2); }
-button.primary { background: var(--series-1); color: #fff; border-color: transparent; }
-button.primary:hover { filter: brightness(1.08); }
-button:disabled { opacity: .5; cursor: default; }
-.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 10px;
-  border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); }
-.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
-.card h2 { font-size: 13px; font-weight: 600; margin: 0 0 12px; color: var(--ink-2); }
+html, body { margin: 0; }
+body { background: radial-gradient(1200px 600px at 85% -10%, var(--page-2), transparent 60%), var(--page); color: var(--ink);
+  font: 14px/1.5 "M PLUS Rounded 1c", system-ui, "Segoe UI", sans-serif; min-height: 100vh; }
+body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .5;
+  background-image: radial-gradient(circle, var(--accent-wash) 1.5px, transparent 1.6px); background-size: 28px 28px; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+.wrap { position: relative; max-width: 1240px; margin: 0 auto; padding: 18px 16px 56px; }
+button { font: inherit; font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink); transition: transform .12s, background .12s; }
+button:hover { background: var(--surface-2); transform: translateY(-1px); }
+button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-color: transparent; }
+button.small { padding: 4px 12px; font-size: 12px; white-space: nowrap; align-self: center; flex: none; }
+button:disabled { opacity: .5; cursor: default; transform: none; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 16px; box-shadow: var(--shadow); }
+.card h2 { font-size: 14px; font-weight: 800; margin: 0 0 12px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.card h2 .tag { font-weight: 500; font-size: 12px; color: var(--muted); }
 .grid { display: grid; gap: 14px; }
-.hero-row { grid-template-columns: 1.3fr repeat(4, 1fr); }
-.two { grid-template-columns: 1fr 1fr; }
-.main { grid-template-columns: 1.6fr 1fr; }
-@media (max-width: 980px) { .hero-row { grid-template-columns: 1fr 1fr; } .two, .main { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { .hero-row { grid-template-columns: 1fr; } }
 .section { margin-top: 14px; }
-.tile .label { color: var(--ink-2); font-size: 12.5px; }
-.tile .value { font-size: 26px; font-weight: 600; margin-top: 4px; }
-.tile .note { color: var(--muted); font-size: 12px; margin-top: 2px; }
-.hero .value { font-size: 48px; line-height: 1.05; }
+.muted { color: var(--muted); }
 .pos { color: var(--good-ink); } .neg { color: var(--bad-ink); }
-.alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
-  background: var(--surface-2); margin-bottom: 8px; font-size: 13px; }
-.alert .ico { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: #fff; }
-.alert.action { outline: 1.5px solid var(--series-1); }
-.tiers { display: flex; gap: 0; margin: 8px 0 6px; }
-.tier { flex: 1; position: relative; padding-top: 18px; font-size: 12px; color: var(--muted); }
-.tier .bar { height: 8px; background: var(--track); border-radius: 4px; margin-right: 3px; overflow: hidden; }
-.tier .fill { height: 100%; background: var(--series-1); border-radius: 4px; }
-.tier .name { position: absolute; top: 0; left: 0; font-weight: 600; color: var(--ink-2); }
+
+/* hero: mascot + bubble */
+.hero { display: grid; grid-template-columns: 170px 1fr auto; gap: 18px; align-items: center; }
+.mascot { width: 170px; height: 170px; filter: drop-shadow(0 8px 14px rgba(110,70,190,.25)); animation: bob 3.2s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-5px); } }
+@media (prefers-reduced-motion: reduce) { .mascot, .spark { animation: none !important; } }
+.bubble { position: relative; background: var(--surface); border: 2px solid var(--accent); border-radius: 22px; padding: 14px 18px;
+  font-size: 15px; font-weight: 500; box-shadow: var(--shadow); max-width: 640px; }
+.bubble::before { content: ""; position: absolute; left: -12px; top: 38px; border: 10px solid transparent; border-right-color: var(--accent); }
+.bubble .who { font-size: 12px; font-weight: 800; color: var(--accent); letter-spacing: .04em; margin-bottom: 2px; }
+.bubble .more { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+.controls { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 4px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--ink-2); white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.spark { position: absolute; color: var(--accent-2); font-size: 14px; animation: twinkle 2.4s ease-in-out infinite; pointer-events: none; }
+@keyframes twinkle { 50% { opacity: .2; transform: scale(.7); } }
+@media (max-width: 860px) { .hero { grid-template-columns: 110px 1fr; } .mascot { width: 110px; height: 110px; } .controls { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; } }
+
+/* tabs */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 4px; }
+.tabs button { padding: 8px 16px; }
+.tabs button.active { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-color: transparent; }
+.tabs .count { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; margin-left: 4px;
+  background: var(--accent-wash); color: var(--ink); }
+.tabs button.active .count { background: rgba(255,255,255,.25); color: #fff; }
+.view { display: none; } .view.active { display: block; animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+
+/* tiles */
+.tiles { grid-template-columns: 1.3fr repeat(4, 1fr); }
+@media (max-width: 980px) { .tiles { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .tiles { grid-template-columns: 1fr; } }
+.tile { cursor: pointer; transition: transform .12s; } .tile:hover { transform: translateY(-2px); }
+.tile .label { color: var(--ink-2); font-size: 12.5px; font-weight: 700; }
+.tile .value { font-size: 26px; font-weight: 800; margin-top: 2px; }
+.tile .note { color: var(--muted); font-size: 12px; }
+.tile.big .value { font-size: 46px; line-height: 1.05; }
+.two { grid-template-columns: 1fr 1fr; } .main { grid-template-columns: 1.5fr 1fr; }
+@media (max-width: 980px) { .two, .main { grid-template-columns: 1fr; } }
+
+/* alerts */
+.alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 14px; background: var(--surface-2);
+  margin-bottom: 8px; font-size: 13px; border: 1px solid var(--border); }
+.alert .ico { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 800; color: #fff; }
+
+/* tiers */
+.tiers { display: flex; margin: 8px 0 6px; }
+.tier { flex: 1; position: relative; padding-top: 20px; font-size: 12px; color: var(--muted); }
+.tier .bar { height: 10px; background: var(--track); border-radius: 6px; margin-right: 4px; overflow: hidden; }
+.tier .fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); border-radius: 6px; }
+.tier .name { position: absolute; top: 0; left: 0; font-weight: 800; color: var(--ink-2); }
 .tier.cur .name { color: var(--ink); }
-.tier .at { margin-top: 4px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.chip { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); }
-.chip.on { background: var(--series-1-wash); color: var(--ink); }
-.chart { position: relative; }
-.chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
-.chart .empty { height: 220px; display: grid; place-items: center; color: var(--muted); text-align: center;
-  font-size: 13px; border: 1px dashed var(--grid); border-radius: 10px; padding: 12px; }
-.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
-  white-space: nowrap; display: none; }
-.tip strong { display: block; font-size: 14px; }
-.tip span { color: var(--muted); }
+.chip { font-size: 12px; padding: 2px 10px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--border); }
+.chip.on { background: var(--accent-wash); color: var(--ink); }
+
+/* tables */
+.tools { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+input[type=search] { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--ink); min-width: 200px; }
+.seg { display: inline-flex; background: var(--surface-2); border-radius: 999px; padding: 3px; border: 1px solid var(--border); }
+.seg button { border: 0; background: transparent; padding: 4px 12px; font-size: 12px; }
+.seg button.active { background: var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.08); }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; padding: 6px 8px;
-  border-bottom: 1px solid var(--grid); }
-td { padding: 7px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { text-align: left; font-weight: 800; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--grid);
+  cursor: pointer; user-select: none; white-space: nowrap; }
+th[data-sort]::after { content: " ↕"; opacity: .35; } th.asc::after { content: " ↑"; opacity: 1; } th.desc::after { content: " ↓"; opacity: 1; }
+td { padding: 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+tr.row { cursor: pointer; } tr.row:hover td { background: var(--surface-2); }
+tr.detail td { background: var(--surface-2); color: var(--ink-2); font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 td.when { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
-td.why { color: var(--ink-2); max-width: 460px; }
-.scroll { max-height: 380px; overflow: auto; }
-.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-.badge i { width: 14px; height: 14px; border-radius: 50%; display: inline-grid; place-items: center;
-  font-style: normal; font-size: 9px; color: #fff; }
-.tabs { display: flex; gap: 4px; margin-bottom: 10px; }
-.tabs button { padding: 4px 12px; font-size: 12.5px; }
-.tabs button.active { background: var(--series-1-wash); border-color: transparent; color: var(--ink); font-weight: 600; }
-pre.log { margin: 0; max-height: 360px; overflow: auto; font: 12px/1.5 ui-monospace, Consolas, monospace;
-  color: var(--ink-2); white-space: pre-wrap; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; }
+td.why { color: var(--ink-2); max-width: 480px; }
+.clip { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scroll { max-height: 440px; overflow: auto; }
+.badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.badge i { width: 15px; height: 15px; border-radius: 50%; display: inline-grid; place-items: center; font-style: normal; font-size: 9px; color: #fff; }
+
+/* charts */
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: 220px; overflow: visible; }
+.chart .empty { height: 220px; display: grid; place-items: center; color: var(--muted); text-align: center; font-size: 13px;
+  border: 2px dashed var(--grid); border-radius: 16px; padding: 12px; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 6px 10px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; display: none; }
+.tip strong { display: block; font-size: 14px; } .tip span { color: var(--muted); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; font-size: 13px; }
 .kv dt { color: var(--muted); } .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
-.muted { color: var(--muted); }
-details summary { cursor: pointer; color: var(--ink-2); font-weight: 600; font-size: 13px; }
+
+/* memory */
+.lesson { display: flex; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); margin-bottom: 8px; border: 1px solid var(--border); }
+.lesson .t { flex: none; font-size: 11px; font-weight: 800; color: var(--accent); background: var(--accent-wash); border-radius: 999px; padding: 2px 8px; height: fit-content; }
+.tune { display: grid; grid-template-columns: 160px 1fr 90px; gap: 10px; align-items: center; font-size: 12.5px; margin-bottom: 8px; }
+.tune .rail { position: relative; height: 10px; background: var(--track); border-radius: 6px; }
+.tune .def { position: absolute; top: -3px; width: 2px; height: 16px; background: var(--muted); border-radius: 1px; }
+.tune .val { position: absolute; top: -4px; width: 18px; height: 18px; border-radius: 50%; margin-left: -9px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); border: 2px solid var(--surface); box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+.timeline { border-left: 2px solid var(--grid); margin-left: 6px; padding-left: 14px; }
+.timeline .ev { position: relative; padding: 4px 0 10px; font-size: 12.5px; color: var(--ink-2); }
+.timeline .ev::before { content: ""; position: absolute; left: -20px; top: 9px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
+.timeline .ev .w { color: var(--muted); font-size: 11.5px; }
+pre.log { margin: 0; max-height: 480px; overflow: auto; font: 12px/1.55 ui-monospace, Consolas, monospace; color: var(--ink-2); white-space: pre-wrap; }
+.refresh { width: 22px; height: 22px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
+  <span class="spark" style="left:2%;top:10px">✦</span><span class="spark" style="left:38%;top:4px;animation-delay:.8s">✧</span>
+  <span class="spark" style="right:6%;top:150px;animation-delay:1.4s">✦</span>
+
+  <div class="hero">
+    <svg class="mascot" id="mascot" viewBox="0 0 200 200" role="img" aria-label="Earner, the agent"></svg>
     <div>
-      <h1>Earner</h1>
-      <div class="sub" id="sub">Loading…</div>
-    </div>
-    <span class="pill" id="health"><span class="dot"></span><span>—</span></span>
-    <span class="pill" id="taskpill"><span>Schedule —</span></span>
-    <div class="spacer"></div>
-    <button id="btn-theme" title="Toggle light/dark">◐</button>
-    <button id="btn-pause">Pause</button>
-    <button class="primary" id="btn-run">Run cycle now</button>
-  </header>
-
-  <div id="alerts"></div>
-
-  <div class="grid hero-row">
-    <div class="card tile hero"><div class="label">Profit</div><div class="value" id="k-profit">—</div>
-      <div class="note">Income minus all costs, what the budget grows from</div></div>
-    <div class="card tile"><div class="label">Income</div><div class="value" id="k-income">—</div><div class="note" id="k-income-n"></div></div>
-    <div class="card tile"><div class="label">Costs</div><div class="value" id="k-exp">—</div><div class="note">Claude API usage</div></div>
-    <div class="card tile"><div class="label">Claude budget left</div><div class="value" id="k-llm">—</div><div class="note" id="k-llm-n"></div></div>
-    <div class="card tile"><div class="label">Bounties submitted</div><div class="value" id="k-subs">—</div><div class="note" id="k-subs-n"></div></div>
-  </div>
-
-  <div class="card section">
-    <h2>Budget tier: what the agent has unlocked</h2>
-    <div class="tiers" id="tiers"></div>
-    <div class="chips" id="unlocks"></div>
-  </div>
-
-  <div class="grid two section">
-    <div class="card">
-      <h2>Profit over time</h2>
-      <div class="chart" id="c-profit"></div>
-    </div>
-    <div class="card">
-      <h2>Paper trading equity (virtual $1,000)</h2>
-      <div class="chart" id="c-paper"></div>
-      <dl class="kv" id="paper-kv" style="margin-top:10px"></dl>
-    </div>
-  </div>
-
-  <div class="card section">
-    <h2>Meme coin paper trading <span class="muted" style="font-weight:400">· virtual money only, never real trades</span></h2>
-    <dl class="kv" id="meme-kv" style="margin-bottom:10px"></dl>
-    <div class="scroll"><table><thead><tr><th>Token</th><th>Status</th><th>Opened</th><th class="num">Cost</th>
-      <th class="num">Value / proceeds</th><th class="num">P&amp;L</th><th>Note</th></tr></thead><tbody id="t-meme"></tbody></table></div>
-  </div>
-
-  <div class="grid main section">
-    <div class="card">
-      <h2>Agent activity</h2>
-      <div class="scroll"><table><thead><tr><th>When</th><th>Bounty</th><th>Outcome</th><th>Why</th></tr></thead>
-        <tbody id="t-subs"></tbody></table></div>
-    </div>
-    <div class="card">
-      <h2>Money</h2>
-      <div class="tabs" id="money-tabs">
-        <button data-k="income" class="active">Income</button><button data-k="costs">Costs</button>
+      <div class="bubble" id="bubble"><div class="who">EARNER</div><div id="say">Loading my notes…</div><div class="more" id="say-more"></div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        <span class="pill" id="health"><span class="dot"></span><span>—</span></span>
+        <span class="pill" id="taskpill">Schedule —</span>
+        <span class="pill" id="lastcycle">—</span>
+        <span class="pill" title="Auto-refresh"><svg class="refresh" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--grid)" stroke-width="3"/><circle id="ring" cx="12" cy="12" r="9" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" transform="rotate(-90 12 12)" stroke-dasharray="56.5" stroke-dashoffset="0"/></svg> live</span>
       </div>
-      <div class="scroll"><table><thead><tr><th>When</th><th>What</th><th class="num">USD</th></tr></thead>
-        <tbody id="t-money"></tbody></table></div>
+    </div>
+    <div class="controls">
+      <button class="primary" id="btn-run">▶ Run cycle now</button>
+      <button id="btn-pause">Pause</button>
+      <button id="btn-theme" title="Toggle light/dark">☾ Theme</button>
     </div>
   </div>
 
-  <div class="card section">
-    <h2>Best opportunities found</h2>
-    <div class="tabs" id="opp-tabs">
-      <button data-k="work" class="active">Bounties</button><button data-k="longshot">Bug bounties (long shots)</button>
-    </div>
-    <div class="scroll"><table><thead><tr><th class="num">Score</th><th>Opportunity</th><th>Why it ranks here</th></tr></thead>
-      <tbody id="t-opps"></tbody></table></div>
+  <div class="tabs" id="tabs">
+    <button data-v="home" class="active">Home</button>
+    <button data-v="earn">Earn <span class="count" id="c-earn"></span></button>
+    <button data-v="trade">Trading <span class="count" id="c-trade"></span></button>
+    <button data-v="memory">Memory <span class="count" id="c-memory"></span></button>
+    <button data-v="ideas">Ideas <span class="count" id="c-ideas"></span></button>
+    <button data-v="log">Log</button>
   </div>
 
-  <div class="card section">
-    <h2>New ways to earn, found by the agent <span class="muted" id="disc-when" style="font-weight:400"></span></h2>
-    <div class="scroll"><table><thead><tr><th class="num">Score</th><th>Idea</th><th>How it earns</th><th>Needs</th>
-      <th class="num">Est. /mo</th><th>Decision</th></tr></thead><tbody id="t-ideas"></tbody></table></div>
-  </div>
+  <!-- HOME -->
+  <section class="view active" id="v-home">
+    <div id="alerts" class="section"></div>
+    <div class="grid tiles section">
+      <div class="card tile big" data-go="earn"><div class="label">Profit</div><div class="value" id="k-profit">—</div><div class="note">Income minus all costs</div></div>
+      <div class="card tile" data-go="earn"><div class="label">Income</div><div class="value" id="k-income">—</div><div class="note" id="k-income-n"></div></div>
+      <div class="card tile" data-go="earn"><div class="label">Costs</div><div class="value" id="k-exp">—</div><div class="note">Claude API usage</div></div>
+      <div class="card tile" data-go="trade"><div class="label">Meme paper</div><div class="value" id="k-meme">—</div><div class="note" id="k-meme-n"></div></div>
+      <div class="card tile" data-go="memory"><div class="label">Lessons learned</div><div class="value" id="k-lessons">—</div><div class="note" id="k-lessons-n"></div></div>
+    </div>
+    <div class="card section">
+      <h2>Budget tier <span class="tag">what the agent has unlocked by earning</span></h2>
+      <div class="tiers" id="tiers"></div><div class="chips" id="unlocks"></div>
+    </div>
+    <div class="grid two section">
+      <div class="card"><h2>Profit over time</h2><div class="chart" id="c-profit"></div></div>
+      <div class="card"><h2>Recent activity <span class="tag">click a row for details</span></h2>
+        <table><tbody id="t-recent"></tbody></table></div>
+    </div>
+  </section>
 
-  <div class="grid two section">
-    <div class="card">
-      <h2>Wallets &amp; rules (policy.json)</h2>
-      <dl class="kv" id="rules"></dl>
+  <!-- EARN -->
+  <section class="view" id="v-earn">
+    <div class="card section">
+      <h2>Agent attempts <span class="tag">every bounty and job it tried, and why</span></h2>
+      <div class="tools"><input type="search" id="q-subs" placeholder="Search attempts…">
+        <div class="seg" id="f-subs"><button data-f="all" class="active">All</button><button data-f="submitted">Submitted</button><button data-f="pending">Pending</button><button data-f="skipped">Skipped</button><button data-f="failed">Failed</button></div></div>
+      <div class="scroll"><table><thead><tr><th data-sort="ts">When</th><th data-sort="source">Where</th><th data-sort="slug">What</th><th data-sort="decision">Outcome</th><th>Why</th></tr></thead><tbody id="t-subs"></tbody></table></div>
     </div>
-    <div class="card">
-      <details open><summary>Live log</summary><pre class="log" id="log"></pre></details>
+    <div class="grid main section">
+      <div class="card"><h2>Best opportunities found</h2>
+        <div class="tools"><input type="search" id="q-opps" placeholder="Search opportunities…">
+          <div class="seg" id="f-opps"><button data-f="work" class="active">Bounties</button><button data-f="longshot">Bug bounties</button></div></div>
+        <div class="scroll"><table><thead><tr><th data-sort="score" class="num">Score</th><th data-sort="title">Opportunity</th><th>Why it ranks here</th></tr></thead><tbody id="t-opps"></tbody></table></div>
+      </div>
+      <div class="card"><h2>Money</h2>
+        <div class="tools"><div class="seg" id="f-money"><button data-f="income" class="active">Income</button><button data-f="costs">Costs</button></div></div>
+        <div class="scroll"><table><thead><tr><th>When</th><th>What</th><th class="num">USD</th></tr></thead><tbody id="t-money"></tbody></table></div>
+      </div>
     </div>
-  </div>
+  </section>
+
+  <!-- TRADING -->
+  <section class="view" id="v-trade">
+    <div class="grid two section">
+      <div class="card"><h2>Meme coin paper trading <span class="tag">virtual $1,000 · never real money</span></h2>
+        <dl class="kv" id="meme-kv"></dl></div>
+      <div class="card"><h2>Trend paper trading <span class="tag">SOL · BTC · ETH, virtual $1,000</span></h2>
+        <div class="chart" id="c-paper"></div><dl class="kv" id="paper-kv" style="margin-top:10px"></dl></div>
+    </div>
+    <div class="card section"><h2>Meme trades <span class="tag">click a row for details</span></h2>
+      <div class="tools"><div class="seg" id="f-meme"><button data-f="all" class="active">All</button><button data-f="open">Open</button><button data-f="closed">Closed</button></div></div>
+      <div class="scroll"><table><thead><tr><th data-sort="sym">Token</th><th data-sort="status">Status</th><th data-sort="opened">Opened</th><th class="num" data-sort="cost">Cost</th><th class="num" data-sort="val">Value</th><th class="num" data-sort="pnl">P&amp;L</th><th>Note</th></tr></thead><tbody id="t-meme"></tbody></table></div>
+    </div>
+  </section>
+
+  <!-- MEMORY -->
+  <section class="view" id="v-memory">
+    <div class="grid two section">
+      <div class="card"><h2>Lessons <span class="tag" id="refl-when"></span></h2><div id="lessons"></div></div>
+      <div class="card"><h2>Self-tuning <span class="tag">paper strategy only · ● default ◉ current</span></h2>
+        <div id="tuning"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button class="small" id="btn-reset-tuning">Undo all self-tuning</button><span class="muted" style="font-size:12px">Values can only move inside the shown bounds.</span></div>
+        <h2 style="margin-top:16px">Paused strategies</h2><div id="paused"></div>
+      </div>
+    </div>
+    <div class="grid two section">
+      <div class="card"><h2>Self-adjustments <span class="tag">every change it made to itself</span></h2><div class="timeline" id="adjustments"></div></div>
+      <div class="card"><h2>Observations <span class="tag">raw memories from each outcome</span></h2><div class="scroll timeline" id="observations"></div></div>
+    </div>
+  </section>
+
+  <!-- IDEAS -->
+  <section class="view" id="v-ideas">
+    <div class="card section"><h2>New ways to earn, found by the agent <span class="tag" id="disc-when"></span></h2>
+      <div class="scroll"><table><thead><tr><th class="num">Score</th><th>Idea</th><th>How it earns</th><th>Needs</th><th class="num">Est. /mo</th><th>Decision</th></tr></thead><tbody id="t-ideas"></tbody></table></div>
+    </div>
+    <div class="card section"><h2>Wallets &amp; rules <span class="tag">policy.json, owner-controlled</span></h2><dl class="kv" id="rules"></dl></div>
+  </section>
+
+  <!-- LOG -->
+  <section class="view" id="v-log">
+    <div class="card section"><h2>Live log</h2><pre class="log" id="log"></pre></div>
+  </section>
 </div>
 
 <script>
 "use strict";
 const $ = (id) => document.getElementById(id);
-const usd = (v, d) => (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString(undefined,
-  { minimumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0), maximumFractionDigits: d ?? (Math.abs(v) < 10 ? 2 : 0) });
-// All stored times are UTC; show them in Stockholm time (handles summer/winter time).
-const STHLM = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit",
-  day: "2-digit", hour: "2-digit", minute: "2-digit" });
-const when = (ts) => {
-  if (!ts) return "";
-  const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z";   // no offset stored -> it is UTC
-  const d = new Date(iso);
-  return isNaN(d) ? ts.replace("T", " ").slice(0, 16) : STHLM.format(d);
-};
+const usd = (v, d) => { v = v || 0; const dd = d ?? (Math.abs(v) < 10 ? 2 : 0);
+  return (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: dd, maximumFractionDigits: dd }); };
+// Stored times are UTC; show Stockholm time (summer/winter aware).
+const STHLM = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+const when = (ts) => { if (!ts) return ""; const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z"; const d = new Date(iso);
+  return isNaN(d) ? String(ts).replace("T", " ").slice(0, 16) : STHLM.format(d); };
 function el(tag, props, ...kids) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(props || {})) {
@@ -227,282 +301,302 @@ function el(tag, props, ...kids) {
   for (const c of kids) if (c != null) n.append(c);
   return n;
 }
-const STATUS = {
-  submitted: ["var(--good)", "✓", "Submitted"],
-  skipped: ["var(--muted)", "–", "Skipped"],
-  failed: ["var(--critical)", "!", "Failed"],
-};
-function badge(kind) {
-  const [c, ico, label] = STATUS[kind] || ["var(--muted)", "?", kind];
-  return el("span", { class: "badge" }, el("i", { style: `background:${c}`, text: ico }), label);
+const store = { get(k, d) { try { return localStorage.getItem(k) ?? d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+const STATUS = { submitted: ["var(--good)", "✓", "Submitted"], pending: ["var(--warning)", "…", "Pending"],
+  skipped: ["var(--muted)", "–", "Skipped"], failed: ["var(--critical)", "!", "Failed"] };
+const badge = (k) => { const [c, i, l] = STATUS[k] || ["var(--muted)", "?", k]; return el("span", { class: "badge" }, el("i", { style: `background:${c}`, text: i }), l); };
+const sourceOf = (id) => (id || "").startsWith("bb:") ? "BountyBook" : "Superteam";
+
+// ---------- mascot (original chibi design, mood from real state) ----------
+function drawMascot(mood) {
+  const eyes = {
+    happy: `<path d="M68 104 q10 -12 20 0" stroke="var(--eye)" stroke-width="5" fill="none" stroke-linecap="round"/><path d="M112 104 q10 -12 20 0" stroke="var(--eye)" stroke-width="5" fill="none" stroke-linecap="round"/>`,
+    sleepy: `<path d="M68 104 h20" stroke="var(--eye)" stroke-width="5" stroke-linecap="round"/><path d="M112 104 h20" stroke="var(--eye)" stroke-width="5" stroke-linecap="round"/>`,
+    worried: `<ellipse cx="78" cy="104" rx="8" ry="11" fill="var(--eye)"/><ellipse cx="122" cy="104" rx="8" ry="11" fill="var(--eye)"/><circle cx="81" cy="99" r="3" fill="#fff"/><circle cx="125" cy="99" r="3" fill="#fff"/><path d="M64 86 l18 6" stroke="var(--eye)" stroke-width="3" stroke-linecap="round"/><path d="M136 86 l-18 6" stroke="var(--eye)" stroke-width="3" stroke-linecap="round"/>`,
+    focused: `<ellipse cx="78" cy="104" rx="9" ry="12" fill="var(--eye)"/><ellipse cx="122" cy="104" rx="9" ry="12" fill="var(--eye)"/><circle cx="81" cy="98" r="3.5" fill="#fff"/><circle cx="125" cy="98" r="3.5" fill="#fff"/><circle cx="75" cy="109" r="1.8" fill="#fff"/><circle cx="119" cy="109" r="1.8" fill="#fff"/>`,
+  }[mood];
+  const mouth = { happy: `<path d="M92 124 q8 10 16 0" fill="var(--blush)" stroke="var(--eye)" stroke-width="2.5"/>`,
+    sleepy: `<ellipse cx="100" cy="126" rx="4" ry="3" fill="var(--eye)"/>`, worried: `<path d="M92 128 q8 -7 16 0" stroke="var(--eye)" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+    focused: `<path d="M94 125 q6 5 12 0" stroke="var(--eye)" stroke-width="3" fill="none" stroke-linecap="round"/>` }[mood];
+  const extra = { sleepy: `<text x="150" y="58" font-size="22" font-weight="800" fill="var(--accent)">z</text><text x="166" y="40" font-size="15" font-weight="800" fill="var(--accent)">z</text>`,
+    worried: `<path d="M150 74 q6 10 0 14 q-6 -4 0 -14z" fill="#7cc8ff"/>`, happy: `<text x="152" y="56" font-size="20" fill="var(--accent-2)">✦</text>`, focused: "" }[mood];
+  $("mascot").innerHTML = `
+    <ellipse cx="100" cy="190" rx="50" ry="6" fill="var(--accent-wash)"/>
+    <path d="M58 150 q42 -22 84 0 l6 40 h-96z" fill="var(--outfit)" stroke="var(--outfit-2)" stroke-width="3"/>
+    <circle cx="100" cy="164" r="9" fill="var(--warning)" stroke="#e29b00" stroke-width="2"/><text x="100" y="168.5" text-anchor="middle" font-size="11" font-weight="800" fill="#7a5200">$</text>
+    <path d="M38 96 q-6 -62 62 -66 q68 4 62 66 q-4 26 -8 40 l-108 0 q-4 -14 -8 -40z" fill="var(--hair)"/>
+    <ellipse cx="100" cy="104" rx="52" ry="48" fill="var(--skin)"/>
+    <path d="M48 92 q20 -40 52 -36 q-4 18 -22 28 q22 -6 34 -26 q8 22 40 32 q-4 -46 -52 -50 q-52 2 -52 52z" fill="var(--hair)"/>
+    <path d="M100 30 q14 -18 10 -28" stroke="var(--hair-2)" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <rect x="34" y="92" width="14" height="30" rx="7" fill="var(--outfit-2)"/><rect x="152" y="92" width="14" height="30" rx="7" fill="var(--outfit-2)"/>
+    <path d="M41 92 q0 -58 59 -60 q59 2 59 60" stroke="var(--outfit-2)" stroke-width="5" fill="none"/>
+    <ellipse cx="66" cy="120" rx="9" ry="5" fill="var(--blush)" opacity=".7"/><ellipse cx="134" cy="120" rx="9" ry="5" fill="var(--blush)" opacity=".7"/>
+    ${eyes}${mouth}${extra}`;
 }
 
-// ---------- theme ----------
-try { const t = localStorage.getItem("earner-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+// ---------- theme / tabs / filters (remembered per viewer) ----------
+const t0 = store.get("earner-theme"); if (t0) document.documentElement.dataset.theme = t0;
 $("btn-theme").onclick = () => {
   const dark = getComputedStyle(document.documentElement).colorScheme.includes("dark");
-  const t = dark ? "light" : "dark";
-  document.documentElement.dataset.theme = t;
-  try { localStorage.setItem("earner-theme", t); } catch (e) {}
+  document.documentElement.dataset.theme = dark ? "light" : "dark"; store.set("earner-theme", dark ? "light" : "dark");
   if (last) render(last);
 };
+let view = (location.hash || "#" + store.get("earner-tab", "home")).slice(1);
+function show(v) {
+  view = v; store.set("earner-tab", v); history.replaceState(null, "", "#" + v);
+  for (const b of $("tabs").children) b.classList.toggle("active", b.dataset.v === v);
+  for (const s of document.querySelectorAll(".view")) s.classList.toggle("active", s.id === "v-" + v);
+  if (last) render(last);
+}
+$("tabs").onclick = (e) => { const b = e.target.closest("button"); if (b) show(b.dataset.v); };
+document.querySelectorAll("[data-go]").forEach((t) => t.onclick = () => show(t.dataset.go));
+const F = { subs: "all", opps: "work", money: "income", meme: "all" }, Q = { subs: "", opps: "" }, SORT = {};
+for (const k of Object.keys(F)) $("f-" + k).onclick = (e) => {
+  const b = e.target.closest("button"); if (!b) return; F[k] = b.dataset.f;
+  for (const x of $("f-" + k).children) x.classList.toggle("active", x === b); if (last) render(last);
+};
+for (const k of Object.keys(Q)) $("q-" + k).oninput = (e) => { Q[k] = e.target.value.toLowerCase(); if (last) render(last); };
+document.querySelectorAll("th[data-sort]").forEach((th) => th.onclick = () => {
+  const tb = th.closest("table").querySelector("tbody").id, key = th.dataset.sort;
+  SORT[tb] = SORT[tb] && SORT[tb].key === key ? { key, dir: -SORT[tb].dir } : { key, dir: 1 };
+  th.closest("tr").querySelectorAll("th").forEach((x) => x.classList.remove("asc", "desc"));
+  th.classList.add(SORT[tb].dir > 0 ? "asc" : "desc"); if (last) render(last);
+});
+const sorted = (tb, rows) => { const s = SORT[tb]; if (!s) return rows;
+  return rows.slice().sort((a, b) => (a[s.key] > b[s.key] ? 1 : a[s.key] < b[s.key] ? -1 : 0) * s.dir); };
+const open = new Set();  // expanded row keys
+function rowsWithDetail(tbody, items, key, cells, detail, cols) {
+  $(tbody).replaceChildren(...items.flatMap((it) => {
+    const k = key(it), tr = el("tr", { class: "row", onclick: () => { open.has(k) ? open.delete(k) : open.add(k); render(last); } }, ...cells(it));
+    return open.has(k) ? [tr, el("tr", { class: "detail" }, el("td", { colspan: cols, text: detail(it) }))] : [tr];
+  }));
+}
+const emptyRow = (tbody, cols, text) => $(tbody).replaceChildren(el("tr", {}, el("td", { colspan: cols, class: "muted", text })));
 
-// ---------- line chart (single series, crosshair + tooltip) ----------
+// ---------- line chart (single series; crosshair + tooltip) ----------
 function lineChart(host, points, opts) {
   host.replaceChildren();
-  if (points.length < 2) {
-    host.append(el("div", { class: "empty", text: opts.empty }));
-    return;
-  }
-  const W = host.clientWidth || 500, H = 220, m = { l: 52, r: 12, t: 10, b: 26 };
-  const xs = points.map((_, i) => i), ys = points.map((p) => p[1]);
+  if (points.length < 2) { host.append(el("div", { class: "empty", text: opts.empty })); return; }
+  const W = host.clientWidth || 500, H = 220, m = { l: 54, r: 12, t: 10, b: 26 };
+  const ys = points.map((p) => p[1]);
   let lo = Math.min(...ys, opts.base ?? Infinity), hi = Math.max(...ys, opts.base ?? -Infinity);
-  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
-  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
-  const X = (i) => m.l + (i / (xs.length - 1)) * (W - m.l - m.r);
-  const Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
-  const NS = "http://www.w3.org/2000/svg";
-  const s = (tag, a) => { const n = document.createElementNS(NS, tag); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; } const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = (i) => m.l + (i / (points.length - 1)) * (W - m.l - m.r), Y = (v) => m.t + (1 - (v - lo) / (hi - lo)) * (H - m.t - m.b);
+  const NS = "http://www.w3.org/2000/svg", s = (t, a) => { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; };
+  const cs = getComputedStyle(document.documentElement), col = (v) => cs.getPropertyValue(v).trim();
   const svg = s("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.label });
-  const cs = getComputedStyle(document.documentElement);
-  const col = (v) => cs.getPropertyValue(v).trim();
-  for (let k = 0; k <= 4; k++) {           // recessive grid + y ticks
-    const v = lo + (k / 4) * (hi - lo), y = Y(v);
+  for (let k = 0; k <= 4; k++) { const v = lo + (k / 4) * (hi - lo), y = Y(v);
     svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: col("--grid"), "stroke-width": 1 }));
-    const t = s("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: col("--muted") });
-    t.textContent = opts.fmt(v); svg.append(t);
-  }
-  if (opts.base != null) {
-    const y = Y(opts.base);
-    svg.append(s("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: col("--axis"), "stroke-width": 1, "stroke-dasharray": "4 4" }));
-  }
-  const step = Math.max(1, Math.ceil(points.length / 6));     // x labels
-  points.forEach((p, i) => {
-    if (i % step && i !== points.length - 1) return;
-    const t = s("text", { x: X(i), y: H - 6, "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle",
-      "font-size": 11, fill: col("--muted") });
-    t.textContent = p[0].slice(5); svg.append(t);
-  });
+    const t = s("text", { x: m.l - 8, y: y + 4, "text-anchor": "end", "font-size": 11, fill: col("--muted") }); t.textContent = opts.fmt(v); svg.append(t); }
+  if (opts.base != null) svg.append(s("line", { x1: m.l, x2: W - m.r, y1: Y(opts.base), y2: Y(opts.base), stroke: col("--axis"), "stroke-dasharray": "4 4" }));
+  const step = Math.max(1, Math.ceil(points.length / 6));
+  points.forEach((p, i) => { if (i % step && i !== points.length - 1) return;
+    const t = s("text", { x: X(i), y: H - 6, "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle", "font-size": 11, fill: col("--muted") });
+    t.textContent = p[0].slice(5); svg.append(t); });
   const d = points.map((p, i) => `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(p[1]).toFixed(1)}`).join("");
   svg.append(s("path", { d: d + `L${X(points.length - 1)},${H - m.b}L${X(0)},${H - m.b}Z`, fill: col("--series-1-wash") }));
-  svg.append(s("path", { d, fill: "none", stroke: col("--series-1"), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
-  const lastI = points.length - 1;
-  svg.append(s("circle", { cx: X(lastI), cy: Y(points[lastI][1]), r: 4, fill: col("--series-1"), stroke: col("--surface"), "stroke-width": 2 }));
-  const cross = s("line", { y1: m.t, y2: H - m.b, stroke: col("--axis"), "stroke-width": 1, visibility: "hidden" });
-  const dot = s("circle", { r: 5, fill: col("--series-1"), stroke: col("--surface"), "stroke-width": 2, visibility: "hidden" });
-  svg.append(cross, dot);
-  const tip = el("div", { class: "tip" });
+  svg.append(s("path", { d, fill: "none", stroke: col("--series-1"), "stroke-width": 2, "stroke-linejoin": "round" }));
+  const L = points.length - 1;
+  svg.append(s("circle", { cx: X(L), cy: Y(points[L][1]), r: 4, fill: col("--series-1"), stroke: col("--surface"), "stroke-width": 2 }));
+  const cross = s("line", { y1: m.t, y2: H - m.b, stroke: col("--axis"), visibility: "hidden" }), dot = s("circle", { r: 5, fill: col("--series-1"), stroke: col("--surface"), "stroke-width": 2, visibility: "hidden" });
+  svg.append(cross, dot); const tip = el("div", { class: "tip" });
   const hit = s("rect", { x: m.l, y: 0, width: W - m.l - m.r, height: H, fill: "transparent" });
-  hit.addEventListener("pointermove", (e) => {
-    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
-    const i = Math.max(0, Math.min(lastI, Math.round(((px - m.l) / (W - m.l - m.r)) * lastI)));
+  hit.addEventListener("pointermove", (e) => { const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (W / r.width);
+    const i = Math.max(0, Math.min(L, Math.round(((px - m.l) / (W - m.l - m.r)) * L)));
     cross.setAttribute("x1", X(i)); cross.setAttribute("x2", X(i)); cross.setAttribute("visibility", "visible");
     dot.setAttribute("cx", X(i)); dot.setAttribute("cy", Y(points[i][1])); dot.setAttribute("visibility", "visible");
     tip.replaceChildren(el("strong", { text: opts.fmt(points[i][1], true) }), el("span", { text: points[i][0] }));
-    tip.style.display = "block";
-    const left = (X(i) / W) * r.width;
-    tip.style.left = Math.min(Math.max(0, left - 50), r.width - 120) + "px";
-    tip.style.top = "4px";
-  });
+    tip.style.display = "block"; tip.style.left = Math.min(Math.max(0, (X(i) / W) * r.width - 50), r.width - 120) + "px"; tip.style.top = "4px"; });
   hit.addEventListener("pointerleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
-  svg.append(hit);
-  host.append(svg, tip);
+  svg.append(hit); host.append(svg, tip);
 }
 
 // ---------- render ----------
-let last = null, moneyTab = "income", oppTab = "work";
+let last = null;
 function render(S) {
   last = S;
-  const st = S.status || {}, T = S.treasury, task = S.task || {};
-  $("sub").textContent = `${S.agent.username ? "Superteam agent " + S.agent.username + " · " : ""}last cycle ${when(st.time) || "never"} (Stockholm)`;
+  const st = S.status || {}, T = S.treasury, task = S.task || {}, M = S.memory || {}, notes = st.notes || [];
+  const MS = st.paper_meme || {}, MB = (S.meme && S.meme.book) || { open: {}, closed: [] };
+  const paused = M.paused || {}, lessons = M.lessons || [], adj = M.adjustments || [];
 
-  // health + schedule
-  const errs = (st.notes || []).some((n) => /error/i.test(n));
-  const hp = $("health"); hp.replaceChildren(el("span", { class: "dot", style: `background:${errs ? "var(--critical)" : st.time ? "var(--good)" : "var(--muted)"}` }),
-    el("span", { text: errs ? "Needs attention" : st.time ? "Healthy" : "Not run yet" }));
-  const disabled = /disabled/i.test(task.Status || "") || /disabled/i.test(task["Scheduled Task State"] || "");
-  const running = /running/i.test(task.Status || "");
-  $("taskpill").replaceChildren(el("span", { text: !task.exists ? "Schedule missing" : disabled ? "Paused" :
-    running ? "Running a cycle…" : "Next run " + (task["Next Run Time"] || "—").replace(/:\d\d$/, "") }));
-  $("btn-pause").textContent = disabled ? "Resume" : "Pause";
-  $("btn-pause").dataset.action = disabled ? "resume" : "pause";
+  // mood + speech
+  const noCredits = notes.some((n) => /credits are used up|exhausted/i.test(n));
+  const errors = notes.some((n) => /error/i.test(n));
+  const stale = st.time && (Date.now() - new Date(st.time)) > 3 * 3600e3;
+  const recentWin = (S.submissions || []).some((r) => r.decision === "submitted");
+  const mood = noCredits || stale ? "sleepy" : errors || Object.keys(paused).length ? "worried" : (T.profit > 0 || recentWin || (MS.return_pct || 0) > 0) ? "happy" : "focused";
+  drawMascot(mood);
+  let say, more = "";
+  if (noCredits) { say = "My AI credits ran out, so I can't do bounty work right now. Scouting and paper trading still run!"; more = "Top up at console.anthropic.com → Plans & Billing."; }
+  else if (Object.keys(paused).length) { const [n, p] = Object.entries(paused)[0]; say = `I paused ${n} on my own: ${p.reason}`; more = "You can resume it in the Memory tab."; }
+  else if (adj[0]) { say = "I adjusted myself: " + adj[0].text; more = when(adj[0].ts); }
+  else if (lessons[0]) { say = "Something I learned: " + lessons[0].text; }
+  else say = `Scanning ${S.opportunities.work.length + S.opportunities.longshot.length}+ ranked opportunities and ${MS.open_positions || 0} meme positions. Nothing needs you right now ✨`;
+  $("say").textContent = say; $("say-more").textContent = more;
+
+  // pills
+  $("health").replaceChildren(el("span", { class: "dot", style: `background:${errors ? "var(--critical)" : st.time ? "var(--good)" : "var(--muted)"}` }),
+    el("span", { text: { sleepy: "Resting", worried: "Needs attention", happy: "Happy", focused: "Working" }[mood] }));
+  const disabled = /disabled/i.test((task.Status || "") + (task["Scheduled Task State"] || "")), running = /running/i.test(task.Status || "");
+  $("taskpill").textContent = !task.exists ? "Schedule missing" : disabled ? "⏸ Paused" : running ? "Running a cycle…" : "Next run " + (task["Next Run Time"] || "—").replace(/:\d\d$/, "");
+  $("lastcycle").textContent = "Last cycle " + (when(st.time) || "never");
+  $("btn-pause").textContent = disabled ? "▶ Resume schedule" : "⏸ Pause schedule"; $("btn-pause").dataset.action = disabled ? "resume" : "pause";
   $("btn-run").disabled = running;
 
-  // alerts: actions for the human first
+  // tab counts
+  $("c-earn").textContent = (S.submissions || []).length || ""; $("c-trade").textContent = (MS.open_positions || 0) || "";
+  $("c-memory").textContent = lessons.length || adj.length || ""; $("c-ideas").textContent = (S.ideas || []).filter((i) => i.status === "proposed").length || "";
+
+  if (view === "home") renderHome(S, st, T, MS, lessons);
+  if (view === "earn") renderEarn(S, T);
+  if (view === "trade") renderTrade(S, st, MS, MB);
+  if (view === "memory") renderMemory(M, lessons, adj, paused);
+  if (view === "ideas") renderIdeas(S);
+  if (view === "log") { const lg = $("log"), atB = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 8; lg.textContent = S.log.join("\n") || "No log yet."; if (atB) lg.scrollTop = lg.scrollHeight; }
+}
+
+function renderHome(S, st, T, MS, lessons) {
   const box = $("alerts"); box.replaceChildren();
-  const add = (text, kind, link) => {
-    const colr = { action: "var(--series-1)", error: "var(--critical)", info: "var(--muted)" }[kind];
-    const ico = { action: "→", error: "!", info: "i" }[kind];
-    const body = el("div", {}, text);
-    if (link) body.append(" ", el("a", { href: link, target: "_blank", rel: "noopener", text: link }));
-    box.append(el("div", { class: "alert" + (kind === "action" ? " action" : "") },
-      el("span", { class: "ico", style: `background:${colr}`, text: ico }), body));
-  };
+  const add = (text, kind, link) => { const c = { action: "var(--accent)", error: "var(--critical)", info: "var(--muted)" }[kind];
+    const body = el("div", {}, text); if (link) body.append(" ", el("a", { href: link, target: "_blank", rel: "noopener", text: link }));
+    box.append(el("div", { class: "alert" }, el("span", { class: "ico", style: `background:${c}`, text: { action: "→", error: "!", info: "i" }[kind] }), body)); };
   if (S.agent.claim_url && !S.agent.claimed) add("One-time step: claim the agent so Superteam can pay you →", "action", S.agent.claim_url);
-  for (const n of st.notes || []) {
-    if (n.startsWith("Claim payouts")) continue;
-    add(n, /error|not set|exhausted/i.test(n) ? "error" : "info");
-  }
-
-  // KPIs
+  for (const n of st.notes || []) if (!n.startsWith("Claim payouts")) add(n, /error|not set|exhausted|used up|GRANT OPEN/i.test(n) ? (/GRANT OPEN/.test(n) ? "action" : "error") : "info");
   const p = $("k-profit"); p.textContent = usd(T.profit); p.className = "value " + (T.profit > 0 ? "pos" : T.profit < 0 ? "neg" : "");
-  $("k-income").textContent = usd(T.income);
-  $("k-income-n").textContent = T.ledger.length ? `${T.ledger.length} payout${T.ledger.length > 1 ? "s" : ""}` : "No payouts yet";
+  $("k-income").textContent = usd(T.income); $("k-income-n").textContent = T.ledger.length ? `${T.ledger.length} payout(s)` : "No payouts yet";
   $("k-exp").textContent = usd(T.expenses, 2);
-  $("k-llm").textContent = usd(st.llm_budget_left_usd ?? 0, 2);
-  $("k-llm-n").textContent = `Max $${S.caps.max_llm_usd_per_day}/day`;
-  const c = S.submission_counts || {};
-  $("k-subs").textContent = (c.submitted || 0).toLocaleString();
-  $("k-subs-n").textContent = `${c.skipped || 0} skipped · ${c.failed || 0} failed`;
+  const mm = $("k-meme"); mm.textContent = MS.equity != null ? `${MS.return_pct >= 0 ? "+" : ""}${MS.return_pct}%` : "—"; mm.className = "value " + ((MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "");
+  $("k-meme-n").textContent = `${MS.open_positions || 0} open · ${MS.trades_closed || 0} closed (virtual)`;
+  $("k-lessons").textContent = lessons.length; $("k-lessons-n").textContent = lessons.length ? "from weekly reflection" : "first reflection pending";
+  const tiers = S.tiers, prof = Math.max(0, T.profit), cur = tiers.reduce((a, t, i) => (T.profit >= t.min_profit_usd ? i : a), 0);
+  $("tiers").replaceChildren(...tiers.map((t, i) => { const nx = tiers[i + 1];
+    let f = i < cur ? 1 : i > cur ? 0 : nx ? (prof - t.min_profit_usd) / (nx.min_profit_usd - t.min_profit_usd) : 1; f = Math.max(i === cur ? 0.03 : 0, Math.min(1, f));
+    return el("div", { class: "tier" + (i === cur ? " cur" : "") }, el("div", { class: "name", text: (i === cur ? "★ " : "") + t.name }),
+      el("div", { class: "bar" }, el("div", { class: "fill", style: `width:${f * 100}%` })), el("div", { style: "margin-top:4px", text: `from $${t.min_profit_usd.toLocaleString()}` })); }));
+  const names = { agent_bounties: "Agent bounties", paper_trading: "Paper trading", llm_from_profit: "Reinvests profit", live_trading: "Live trading" }, on = new Set(st.unlocks || []);
+  $("unlocks").replaceChildren(...Object.keys(names).map((u) => el("span", { class: "chip" + (on.has(u) ? " on" : ""), text: (on.has(u) ? "✓ " : "🔒 ") + names[u] })));
+  lineChart($("c-profit"), T.series, { label: "Cumulative profit", base: 0, fmt: (v, full) => usd(v, full ? 2 : Math.abs(v) < 10 ? 2 : 0), empty: "The line starts once the agent has earned or spent money." });
+  const recent = (S.submissions || []).slice(0, 6);
+  if (!recent.length) return emptyRow("t-recent", 3, "No attempts yet.");
+  rowsWithDetail("t-recent", recent, (r) => "h" + r.ts + r.slug,
+    (r) => [el("td", { class: "when", text: when(r.ts) }), el("td", {}, el("div", { class: "clip", text: r.slug || "—" })), el("td", {}, badge(r.decision))],
+    (r) => `${sourceOf(r.listing_id)} · ${r.reason || ""}`, 3);
+}
 
-  // tiers
-  const tiers = S.tiers, prof = Math.max(0, T.profit);
-  const curIdx = tiers.reduce((a, t, i) => (T.profit >= t.min_profit_usd ? i : a), 0);
-  $("tiers").replaceChildren(...tiers.map((t, i) => {
-    const next = tiers[i + 1];
-    let f = i < curIdx ? 1 : i > curIdx ? 0 : next ? (prof - t.min_profit_usd) / (next.min_profit_usd - t.min_profit_usd) : 1;
-    f = Math.max(i === curIdx ? 0.02 : 0, Math.min(1, f));
-    return el("div", { class: "tier" + (i === curIdx ? " cur" : "") },
-      el("div", { class: "name", text: (i === curIdx ? "● " : "") + t.name }),
-      el("div", { class: "bar" }, el("div", { class: "fill", style: `width:${f * 100}%` })),
-      el("div", { class: "at", text: `from $${t.min_profit_usd.toLocaleString()} profit` }));
-  }));
-  const all = ["agent_bounties", "paper_trading", "llm_from_profit", "live_trading"];
-  const names = { agent_bounties: "Agent bounties", paper_trading: "Paper trading", llm_from_profit: "Reinvests profit in Claude", live_trading: "Live trading" };
-  const on = new Set(st.unlocks || []);
-  $("unlocks").replaceChildren(...all.map((u) => el("span", { class: "chip" + (on.has(u) ? " on" : ""),
-    text: (on.has(u) ? "✓ " : "🔒 ") + names[u] + (u === "live_trading" && st.live_trading ? ` · $${st.trading_capital_usd}` : "") })));
+function renderEarn(S, T) {
+  let subs = (S.submissions || []).map((r) => ({ ...r, source: sourceOf(r.listing_id) }));
+  if (F.subs !== "all") subs = subs.filter((r) => r.decision === F.subs);
+  if (Q.subs) subs = subs.filter((r) => `${r.slug} ${r.reason} ${r.source}`.toLowerCase().includes(Q.subs));
+  subs = sorted("t-subs", subs);
+  if (!subs.length) emptyRow("t-subs", 5, "Nothing matches.");
+  else rowsWithDetail("t-subs", subs, (r) => "s" + r.ts + r.slug,
+    (r) => [el("td", { class: "when", text: when(r.ts) }), el("td", {}, el("span", { class: "chip", text: r.source })),
+      el("td", {}, r.source === "Superteam" ? el("a", { href: `https://superteam.fun/earn/listing/${encodeURIComponent(r.slug || "")}`, target: "_blank", rel: "noopener", text: r.slug, onclick: (e) => e.stopPropagation() }) : r.slug),
+      el("td", {}, badge(r.decision)), el("td", { class: "why" }, el("div", { class: "clip", text: r.reason || "" }))],
+    (r) => r.reason || "(no reason recorded)", 5);
+  let ops = (S.opportunities[F.opps] || []); if (Q.opps) ops = ops.filter((o) => `${o.title} ${o.reasons.join(" ")}`.toLowerCase().includes(Q.opps));
+  ops = sorted("t-opps", ops);
+  if (!ops.length) emptyRow("t-opps", 3, "Nothing matches.");
+  else rowsWithDetail("t-opps", ops, (o) => "o" + o.id,
+    (o) => [el("td", { class: "num", text: o.score }), el("td", {}, el("a", { href: o.url, target: "_blank", rel: "noopener", text: o.title, onclick: (e) => e.stopPropagation() })),
+      el("td", { class: "why" }, el("div", { class: "clip", text: o.reasons.join(" · ") }))],
+    (o) => o.reasons.join("\n"), 3);
+  const rows = F.money === "income" ? T.ledger.map((r) => [r.ts, r.note || r.token, r.usd]) : T.expenses_recent.map((r) => [r.ts, r.note || r.category, -r.usd]);
+  $("t-money").replaceChildren(...(rows.length ? rows.map(([ts, w, v]) => el("tr", {}, el("td", { class: "when", text: when(ts) }),
+    el("td", { class: "why" }, el("div", { class: "clip", text: w })), el("td", { class: "num " + (v > 0 ? "pos" : ""), text: usd(v, 2) })))
+    : [el("tr", {}, el("td", { colspan: 3, class: "muted", text: F.money === "income" ? "No payouts detected yet." : "No costs yet." }))]));
+}
 
-  // charts
-  lineChart($("c-profit"), T.series, { label: "Cumulative profit", base: 0,
-    fmt: (v, full) => usd(v, full ? 2 : Math.abs(v) < 10 ? 2 : 0),
-    empty: "The line starts once the agent has earned or spent money." });
-  const P = S.paper;
-  lineChart($("c-paper"), P.history, { label: "Paper equity", base: P.start,
-    fmt: (v, full) => usd(v, full ? 2 : 0),
-    empty: P.history.length ? `First day recorded (${P.history[0][0]}). The line appears after the second daily check.` : "Paper trading starts on the next cycle." });
-  const ps = P.stats, g = S.gate, holds = Object.entries(P.qty || {}).filter(([, q]) => q > 1e-9);
-  $("paper-kv").replaceChildren(
-    el("dt", { text: "Return" }), el("dd", { class: ps.return_pct > 0 ? "pos" : ps.return_pct < 0 ? "neg" : "", text: `${ps.return_pct >= 0 ? "+" : ""}${ps.return_pct}%` }),
-    el("dt", { text: "Worst drop" }), el("dd", { text: `${ps.max_drawdown_pct}% (limit ${g.max_paper_drawdown_pct}%)` }),
-    el("dt", { text: "Track record" }), el("dd", { text: `${ps.days} / ${g.min_paper_days} days needed for live trading` }),
-    el("dt", { text: "Holding" }), el("dd", { text: holds.length ? holds.map(([a]) => a).join(", ") : "Cash (no asset in an uptrend)" }));
-
-  // activity
-  const tb = $("t-subs");
-  tb.replaceChildren(...(S.submissions.length ? S.submissions.map((r) => el("tr", {},
-    el("td", { class: "when", text: when(r.ts) }),
-    el("td", {}, (r.listing_id || "").startsWith("bb:")
-      ? el("span", {}, el("span", { class: "chip", text: "BountyBook" }), " ", r.slug || "—")
-      : el("span", {}, el("span", { class: "chip", text: "Superteam" }), " ",
-          el("a", { href: `https://superteam.fun/earn/listing/${encodeURIComponent(r.slug || "")}`, target: "_blank", rel: "noopener", text: r.slug || "—" }))),
-    el("td", {}, badge(r.decision)),
-    el("td", { class: "why", text: r.reason || "" })))
-    : [el("tr", {}, el("td", { colspan: 4, class: "muted", text: "No bounty attempts yet. The agent works up to 2 per cycle once Claude is reachable." }))]));
-
-  // money
-  const rows = moneyTab === "income"
-    ? T.ledger.map((r) => [r.ts, r.note || r.token, r.usd])
-    : T.expenses_recent.map((r) => [r.ts, r.note || r.category, -r.usd]);
-  $("t-money").replaceChildren(...(rows.length ? rows.map(([ts, what, v]) => el("tr", {},
-    el("td", { class: "when", text: when(ts) }), el("td", { class: "why", text: what }),
-    el("td", { class: "num " + (v > 0 ? "pos" : ""), text: usd(v, 2) })))
-    : [el("tr", {}, el("td", { colspan: 3, class: "muted", text: moneyTab === "income" ? "No payouts detected in your wallet yet." : "No costs yet." }))]));
-
-  // opportunities
-  const ops = S.opportunities[oppTab] || [];
-  $("t-opps").replaceChildren(...ops.map((o) => el("tr", {},
-    el("td", { class: "num", text: o.score }),
-    el("td", {}, el("a", { href: o.url, target: "_blank", rel: "noopener", text: o.title })),
-    el("td", { class: "why", text: o.reasons.join(" · ") }))));
-
-  // meme paper book
-  const MB = (S.meme && S.meme.book) || { open: {}, closed: [] }, MS = st.paper_meme || {}, scan = S.meme && S.meme.last_scan;
+function renderTrade(S, st, MS, MB) {
+  const scan = S.meme && S.meme.last_scan;
   const rej = scan && scan.rejected ? Object.entries(scan.rejected).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `${k} ${n}`).join(", ") : "—";
   $("meme-kv").replaceChildren(
-    el("dt", { text: "Virtual equity" }), el("dd", { class: (MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "",
-      text: MS.equity != null ? `${usd(MS.equity, 2)} (${MS.return_pct >= 0 ? "+" : ""}${MS.return_pct}%) of $1,000` : "first scan pending" }),
+    el("dt", { text: "Virtual equity" }), el("dd", { class: (MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "", text: MS.equity != null ? `${usd(MS.equity, 2)} (${MS.return_pct >= 0 ? "+" : ""}${MS.return_pct}%)` : "first scan pending" }),
+    el("dt", { text: "Realized P&L" }), el("dd", { text: usd(MS.realized_pnl || 0, 2) }),
     el("dt", { text: "Trades" }), el("dd", { text: `${MS.open_positions || 0} open · ${MS.trades_closed || 0} closed · win rate ${MS.win_rate == null ? "—" : Math.round(MS.win_rate * 100) + "%"}` }),
-    el("dt", { text: "Last scan" }), el("dd", { text: scan ? `${when(scan.time)} · ${scan.with_pairs} tokens checked, ${scan.passed_market_filters} passed market filters` : "—" }),
-    el("dt", { text: "Main rejections" }), el("dd", { text: rej }));
-  const mrows = [
-    ...Object.entries(MB.open).map(([m, p]) => ({ sym: p.symbol, url: p.url, status: "open", opened: p.opened, cost: p.cost, val: p.value ?? p.cost, note: `momentum ${p.score}` })),
-    ...MB.closed.slice().reverse().map((t) => ({ sym: t.symbol, url: t.url, status: "closed", opened: t.opened, cost: t.cost, val: t.proceeds, note: t.reason })),
-  ];
-  $("t-meme").replaceChildren(...(mrows.length ? mrows.map((r) => {
-    const pnl = r.val - r.cost;
-    return el("tr", {},
-      el("td", {}, r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener", text: r.sym }) : r.sym),
-      el("td", { text: r.status }), el("td", { class: "when", text: when(r.opened) }),
-      el("td", { class: "num", text: usd(r.cost, 2) }), el("td", { class: "num", text: usd(r.val, 2) }),
-      el("td", { class: "num " + (pnl > 0 ? "pos" : pnl < 0 ? "neg" : ""), text: usd(pnl, 2) }),
-      el("td", { class: "why", text: r.note }));
-  }) : [el("tr", {}, el("td", { colspan: 7, class: "muted", text: "No meme trades yet. The scanner runs every 2 hours and only buys tokens that pass every safety filter." }))]));
+    el("dt", { text: "Last scan" }), el("dd", { text: scan ? `${when(scan.time)} · ${scan.with_pairs} checked, ${scan.passed_market_filters} passed` : "—" }),
+    el("dt", { text: "Top rejections" }), el("dd", { text: rej }));
+  let rows = [...Object.entries(MB.open).map(([m, p]) => ({ mint: m, sym: p.symbol, url: p.url, status: "open", opened: p.opened, cost: p.cost, val: p.value ?? p.cost, note: p.note || `momentum ${p.score}`, entry: p.entry_price, lastp: p.last_price })),
+    ...MB.closed.map((t) => ({ mint: t.mint, sym: t.symbol, url: t.url, status: "closed", opened: t.opened, closedAt: t.closed, cost: t.cost, val: t.proceeds, note: t.reason }))];
+  rows.forEach((r) => r.pnl = r.val - r.cost);
+  if (F.meme !== "all") rows = rows.filter((r) => r.status === F.meme);
+  rows = SORT["t-meme"] ? sorted("t-meme", rows) : rows.reverse();
+  if (!rows.length) emptyRow("t-meme", 7, "No trades here yet.");
+  else rowsWithDetail("t-meme", rows, (r) => "m" + r.mint + r.opened,
+    (r) => [el("td", {}, r.url ? el("a", { href: r.url, target: "_blank", rel: "noopener", text: r.sym, onclick: (e) => e.stopPropagation() }) : r.sym),
+      el("td", { text: r.status }), el("td", { class: "when", text: when(r.opened) }), el("td", { class: "num", text: usd(r.cost, 2) }),
+      el("td", { class: "num", text: usd(r.val, 2) }), el("td", { class: "num " + (r.pnl > 0 ? "pos" : r.pnl < 0 ? "neg" : ""), text: usd(r.pnl, 2) }),
+      el("td", { class: "why", text: r.note })],
+    (r) => `Mint ${r.mint}\nOpened ${when(r.opened)}${r.closedAt ? " · closed " + when(r.closedAt) : ""}${r.entry ? `\nEntry $${r.entry}` : ""}${r.lastp ? ` · last $${r.lastp}` : ""}\nReturn ${((r.val / r.cost - 1) * 100).toFixed(1)}% (after 3% costs each way)`, 7);
+  const P = S.paper, ps = P.stats, g = S.gate, holds = Object.entries(P.qty || {}).filter(([, q]) => q > 1e-9);
+  lineChart($("c-paper"), P.history, { label: "Paper equity", base: P.start, fmt: (v, full) => usd(v, full ? 2 : 0),
+    empty: P.history.length ? `First day recorded (${P.history[0][0]}).` : "Starts on the next cycle." });
+  $("paper-kv").replaceChildren(el("dt", { text: "Return" }), el("dd", { text: `${ps.return_pct >= 0 ? "+" : ""}${ps.return_pct}%` }),
+    el("dt", { text: "Worst drop" }), el("dd", { text: `${ps.max_drawdown_pct}% (limit ${g.max_paper_drawdown_pct}%)` }),
+    el("dt", { text: "Track record" }), el("dd", { text: `${ps.days} / ${g.min_paper_days} days` }),
+    el("dt", { text: "Holding" }), el("dd", { text: holds.length ? holds.map(([a]) => a).join(", ") : "Cash (no uptrend)" }));
+}
 
-  // discovered ideas
-  $("disc-when").textContent = S.last_discovery ? `· last research ${when(S.last_discovery)}, runs weekly` : "· first research runs automatically this week";
+function renderMemory(M, lessons, adj, paused) {
+  $("refl-when").textContent = M.last_reflection ? `· last reflection ${when(M.last_reflection)}, weekly` : "· first weekly reflection pending";
+  $("lessons").replaceChildren(...(lessons.length ? lessons.map((l) => el("div", { class: "lesson" }, el("span", { class: "t", text: l.topic }), el("div", { text: l.text })))
+    : [el("div", { class: "muted", text: "No lessons yet. Once a week the agent reads its own observations and writes down what it learned. Lessons are fed into every future decision." })]));
+  if (M.reflection && M.reflection.text) $("lessons").append(el("div", { class: "muted", style: "font-size:12.5px;margin-top:6px", text: "Summary: " + M.reflection.text }));
+  const label = { "meme.min_liquidity": "Min liquidity $", "meme.min_volume_24h": "Min 24h volume $", "meme.min_buys_24h": "Min buys / 24h",
+    "meme.min_age_h": "Min age (hours)", "meme.take_profit": "Take profit", "meme.stop_loss": "Stop loss", "meme.max_hold_days": "Max hold (days)" };
+  const fmt = (k, v) => /take_profit|stop_loss/.test(k) ? `${v > 0 ? "+" : ""}${Math.round(v * 100)}%` : Number(v).toLocaleString();
+  $("tuning").replaceChildren(...Object.entries(M.bounds || {}).map(([k, b]) => {
+    const v = M.params[k], pos = (x) => ((x - b.min) / (b.max - b.min)) * 100;
+    return el("div", { class: "tune", title: `bounds ${fmt(k, b.min)} … ${fmt(k, b.max)}` }, el("span", { text: label[k] || k }),
+      el("div", { class: "rail" }, el("div", { class: "def", style: `left:${pos(b.default)}%` }), el("div", { class: "val", style: `left:${pos(v)}%` })),
+      el("span", { class: "num", style: v !== b.default ? "font-weight:800" : "", text: fmt(k, v) }));
+  }));
+  $("paused").replaceChildren(...(Object.keys(paused).length ? Object.entries(paused).map(([n, p]) => el("div", { class: "lesson" },
+    el("span", { class: "t", text: n }), el("div", { style: "flex:1" }, el("div", { text: p.reason }), el("div", { class: "muted", style: "font-size:12px", text: "since " + when(p.since) })),
+    el("button", { class: "small primary", text: "Resume", onclick: (e) => act(`/api/strategy/${encodeURIComponent(n)}/resume`, e.currentTarget) })))
+    : [el("div", { class: "muted", text: "Nothing paused. Strategies that keep failing are paused automatically." })]));
+  $("adjustments").replaceChildren(...(adj.length ? adj.map((a) => el("div", { class: "ev" }, el("div", { text: a.text }), el("div", { class: "w", text: `${when(a.ts)} · ${a.topic}` })))
+    : [el("div", { class: "muted", text: "No self-adjustments yet." })]));
+  $("observations").replaceChildren(...((M.observations || []).length ? M.observations.map((o) => el("div", { class: "ev" }, el("div", { text: o.text }), el("div", { class: "w", text: `${when(o.ts)} · ${o.topic}` })))
+    : [el("div", { class: "muted", text: "No observations yet." })]));
+}
+
+function renderIdeas(S) {
+  $("disc-when").textContent = S.last_discovery ? `· last research ${when(S.last_discovery)}, weekly` : "· first research pending";
   const ideas = S.ideas || [];
-  $("t-ideas").replaceChildren(...(ideas.length ? ideas.map((i) => {
-    const decision = i.status === "proposed"
-      ? el("span", {}, el("button", { class: "primary", style: "padding:3px 10px", text: "Approve",
-            onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/approve`, e.currentTarget) }), " ",
-          el("button", { style: "padding:3px 10px", text: "Reject",
-            onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/reject`, e.currentTarget) }))
-      : el("span", { class: "badge", text: i.status === "approved" ? "✓ Approved · plan written" : i.status });
-    return el("tr", {},
-      el("td", { class: "num", text: i.score }),
-      el("td", {}, i.url ? el("a", { href: i.url, target: "_blank", rel: "noopener", text: i.name }) : i.name,
-        el("div", { class: "muted", style: "font-size:12px", text: `${i.category} · ${i.payment || ""}` }),
-        el("div", { style: "font-size:12px", class: i.probe_ok ? "pos" : "muted", text: i.probe_ok ? "✓ API answered live" : "API not verified" })),
-      el("td", { class: "why", text: i.how_agent_earns + (i.why ? " — " + i.why : "") }),
-      el("td", { class: "why", text: (i.needs || []).join(", ") }),
-      el("td", { class: "num", text: i.est_monthly_usd != null ? usd(i.est_monthly_usd, 0) : "—" }),
-      el("td", {}, decision));
-  }) : [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No ideas yet. The agent researches new ways to earn once a week." }))]));
-
-  // rules
-  const C = S.caps, F = S.flags;
-  const kv = [["Auto-submit", F.allow_auto_submit ? "On" : "Off"], ["Live trading allowed", F.allow_live_trading ? "Yes" : "No (you must switch it on)"],
-    ["Starting Claude budget", `$${F.bootstrap_llm_usd}`], ["Claude per day", `$${C.max_llm_usd_per_day}`],
-    ["Submissions per day", C.max_submissions_per_day], ["Max trading capital", `$${C.max_trading_capital_usd}`],
-    ["Max single trade", `$${C.max_trade_usd}`], ["Max daily trading loss", `$${C.max_daily_trading_loss_usd}`],
-    ["Kill switch at drawdown", `${C.trading_kill_drawdown_pct}%`]];
-  if (S.agent.evm_address) kv.unshift(["Agent Base wallet", `${S.agent.evm_address} · $${(S.agent.evm_balance ?? 0).toFixed(2)} USDC`]);
+  $("t-ideas").replaceChildren(...(ideas.length ? ideas.map((i) => el("tr", {},
+    el("td", { class: "num", text: i.score }),
+    el("td", {}, i.url ? el("a", { href: i.url, target: "_blank", rel: "noopener", text: i.name }) : i.name, el("div", { class: "muted", style: "font-size:12px", text: `${i.category} · ${i.payment || ""}` }),
+      el("div", { style: "font-size:12px", class: i.probe_ok ? "pos" : "muted", text: i.probe_ok ? "✓ API answered live" : "API not verified" })),
+    el("td", { class: "why", text: i.how_agent_earns + (i.why ? " — " + i.why : "") }), el("td", { class: "why", text: (i.needs || []).join(", ") }),
+    el("td", { class: "num", text: i.est_monthly_usd != null ? usd(i.est_monthly_usd, 0) : "—" }),
+    el("td", {}, i.status === "proposed" ? el("span", {}, el("button", { class: "small primary", text: "Approve", onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/approve`, e.currentTarget) }), " ",
+      el("button", { class: "small", text: "Reject", onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/reject`, e.currentTarget) })) : el("span", { class: "badge", text: i.status }))))
+    : [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No ideas yet. The agent researches new ways to earn once a week (needs AI credits)." }))]));
+  const C = S.caps, Fl = S.flags, kv = [["Auto-submit", Fl.allow_auto_submit ? "On" : "Off"], ["Live trading allowed", Fl.allow_live_trading ? "Yes" : "No"],
+    ["Starting Claude budget", `$${Fl.bootstrap_llm_usd}`], ["Claude per day", `$${C.max_llm_usd_per_day}`], ["Submissions per day", C.max_submissions_per_day],
+    ["Max trading capital", `$${C.max_trading_capital_usd}`], ["Kill switch at drawdown", `${C.trading_kill_drawdown_pct}%`]];
+  if (S.agent.evm_address) kv.unshift(["Agent Base wallet", `${S.agent.evm_address} · $${(S.agent.evm_balance ?? 0).toFixed(2)}`]);
   $("rules").replaceChildren(...kv.flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: String(v) })]));
-
-  const lg = $("log"), atBottom = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 8;
-  lg.textContent = S.log.join("\n") || "No log yet.";
-  if (atBottom) lg.scrollTop = lg.scrollHeight;
 }
 
-for (const [tabs, set] of [["money-tabs", (k) => (moneyTab = k)], ["opp-tabs", (k) => (oppTab = k)]]) {
-  $(tabs).addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
-    set(b.dataset.k);
-    for (const x of $(tabs).children) x.classList.toggle("active", x === b);
-    if (last) render(last);
-  });
-}
-
+// ---------- data + actions ----------
+const PERIOD = 20000; let t0r = Date.now();
 async function load() {
-  try {
-    const r = await fetch("/api/state", { cache: "no-store" });
-    render(await r.json());
-  } catch (e) {
-    $("sub").textContent = "Dashboard server not reachable. Start it with: python -m earner ui";
-  }
+  try { const r = await fetch("/api/state", { cache: "no-store" }); render(await r.json()); t0r = Date.now(); }
+  catch (e) { $("say").textContent = "I can't reach my dashboard server. Start it with dashboard.cmd."; drawMascot("sleepy"); }
 }
 async function act(path, btn) {
+  if (path === "/api/tuning/reset" && !confirm("Undo every self-tuned value and return to defaults?")) return;
   btn.disabled = true;
-  try { await fetch(path, { method: "POST", headers: { "X-Earner": "1" } }); } finally {
-    setTimeout(() => { btn.disabled = false; load(); }, 1500);
-  }
+  try { await fetch(path, { method: "POST", headers: { "X-Earner": "1" } }); } finally { setTimeout(() => { btn.disabled = false; load(); }, 1200); }
 }
 $("btn-run").onclick = (e) => act("/api/run", e.currentTarget);
 $("btn-pause").onclick = (e) => act("/api/" + (e.currentTarget.dataset.action || "pause"), e.currentTarget);
+$("btn-reset-tuning").onclick = (e) => act("/api/tuning/reset", e.currentTarget);
+setInterval(() => { const f = Math.min(1, (Date.now() - t0r) / PERIOD); $("ring").setAttribute("stroke-dashoffset", String(56.5 * f)); }, 500);
 window.addEventListener("resize", () => last && render(last));
-load();
-setInterval(load, 20000);
+drawMascot("focused"); show(view); load(); setInterval(load, PERIOD);
 </script>
 </body>
 </html>

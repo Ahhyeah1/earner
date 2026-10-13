@@ -25,6 +25,11 @@ CREATE TABLE IF NOT EXISTS submissions (
   reason TEXT, payload TEXT
 );
 CREATE TABLE IF NOT EXISTS kv (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS memories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT,
+  kind TEXT,                                -- observation | lesson | adjustment | reflection
+  topic TEXT, text TEXT, evidence TEXT, active INTEGER NOT NULL DEFAULT 1
+);
 CREATE TABLE IF NOT EXISTS ideas (
   id TEXT PRIMARY KEY, name TEXT, url TEXT, data TEXT, score REAL, probe_ok INTEGER,
   status TEXT NOT NULL DEFAULT 'proposed',  -- proposed | approved | rejected | built

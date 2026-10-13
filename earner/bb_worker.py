@@ -98,8 +98,34 @@ class BBWorker:
     def __init__(self, store, bb, llm, now_iso, jobs_left, log=print):
         self.store, self.bb, self.llm, self.now, self.log = store, bb, llm, now_iso, log
         self.jobs_left = jobs_left
+        from .memory import recall
+        self.lessons = recall(store, ("bountybook", "general"))
+
+    def poll_pending(self):
+        """Settle submissions whose verification finished since the last cycle."""
+        rows = self.store.db.execute("SELECT * FROM submissions WHERE decision='pending' AND listing_id LIKE 'bb:%'"
+                                     ).fetchall()
+        for r in rows:
+            job_id = r["listing_id"][3:]
+            try:
+                st = self.bb.status(job_id)
+            except ApiError:
+                continue
+            ours = (st.get("executor_address") or "").lower() == self.bb.addr.lower()
+            if st.get("status") in ("verified", "paid", "completed") and ours:
+                decision, reason = "submitted", "VERIFIED by the platform - USDC to agent wallet"
+            elif st.get("status") in ("open", "failed", "cancelled") or (st.get("executor_address") and not ours):
+                vr = st.get("verification_result")
+                decision, reason = "failed", f"platform verification rejected it (job back to {st.get('status')})" + (
+                    f": {str(vr)[:200]}" if vr else "; no reason given")
+            else:
+                continue                                   # still verifying
+            self.store.db.execute("UPDATE submissions SET decision=?, reason=? WHERE id=?", (decision, reason, r["id"]))
+            self.log(f"  bb {r['slug'][:50]}: {decision} ({reason[:80]})")
+        self.store.commit()
 
     def run(self, max_jobs=3, max_attempts=3):
+        self.poll_pending()
         if self.jobs_left <= 0:
             return
         jobs = [j for j in self.bb.open_jobs() if not self.store.handled("bb:" + j["id"])]
@@ -140,7 +166,8 @@ class BBWorker:
         research = job.get("job_type") in ("research", "find", "data")
         brief = (f"<job>\nTitle: {job['title']}\nType: {job.get('job_type')}\n\n{job.get('description', '')}\n\n"
                  f"Instructions: {job['spec'].get('instructions', '')}\n</job>\n\n"
-                 f"Required files (exact names): {json.dumps(required)}\n"
+                 + (f"Lessons from this agent's past attempts (apply them):\n{self.lessons}\n\n" if self.lessons else "")
+                 + f"Required files (exact names): {json.dumps(required)}\n"
                  f"The deliverable is verified by running this {lang} test in a sandbox with NO network "
                  f"and a 30s limit; it must pass:\n<test>\n{sc['test_code']}\n</test>\n")
         feedback = ""
@@ -190,6 +217,11 @@ class BBWorker:
             raise
         resp = self.bb.submit(job["id"], files)
         v = (resp or {}).get("verification") or {}
+        if not v and (resp or {}).get("status") == "submitted":
+            # Verification is asynchronous: record as pending, poll_pending() settles it later.
+            self._record(job, "pending", "submitted; waiting for the platform's verification",
+                         {"files": list(files), "response": resp, "reward": reward})
+            return 1
         if v.get("passed"):
             self._record(job, "submitted", f"VERIFIED - ${reward * (1 - FEE):.2f} USDC to agent wallet",
                          {"files": list(files), "response": resp})

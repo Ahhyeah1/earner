@@ -68,6 +68,9 @@ class BountyBook:
         return self._req("POST", f"/jobs/{job_id}/submit",
                          {"executorAddress": self.addr, "outputData": {"files": files}}, auth=True)
 
+    def status(self, job_id):
+        return self._req("GET", f"/jobs/{job_id}/status")
+
     def profile(self):
         try:
             return self._req("GET", f"/agents/{self.addr}")

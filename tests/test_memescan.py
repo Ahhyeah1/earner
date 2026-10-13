@@ -44,7 +44,7 @@ class PaperBook(unittest.TestCase):
         self.addCleanup(self.st.db.close)
 
     def run_step(self, market, cands, rug=lambda m: SAFE):
-        return ms.step(self.st, TS, fetch_pairs=lambda ms_: {m: market[m] for m in ms_ if m in market},
+        return ms.step(self.st, TS, fetch_pairs=lambda ms_, strict=False: {m: market[m] for m in ms_ if m in market},
                        fetch_candidates=lambda: cands, rugcheck=rug, log=lambda *_: None)
 
     def test_buys_ranked_safe_tokens_only(self):
@@ -68,6 +68,25 @@ class PaperBook(unittest.TestCase):
         self.assertEqual(rug_trade["pnl"], -ms.POSITION_USD)          # a rug loses the whole stake
         self.assertEqual(st["trades_closed"], 3)
         self.assertEqual(st["open_positions"], 0)
+
+    def test_failed_lookup_never_closes_positions(self):
+        self.run_step({"a": pair("a")}, ["a"])
+        def boom(mints, strict=False):
+            if strict:
+                raise ms.FetchFailed("api down")
+            return {}
+        ms.step(self.st, TS, fetch_pairs=boom, fetch_candidates=lambda: [], rugcheck=lambda m: SAFE,
+                log=lambda *_: None)
+        self.assertIn("a", ms.book(self.st)["open"])
+        self.assertEqual(ms.book(self.st)["closed"], [])
+
+    def test_missing_token_needs_consecutive_misses(self):
+        self.run_step({"a": pair("a")}, ["a"])
+        for i in range(ms.MISSING_LIMIT - 1):
+            self.run_step({}, [])
+            self.assertIn("a", ms.book(self.st)["open"])
+        self.run_step({}, [])
+        self.assertEqual(ms.book(self.st)["closed"][0]["reason"], "rug / liquidity gone")
 
     def test_respects_position_limits(self):
         market = {f"t{i}": pair(f"t{i}") for i in range(20)}

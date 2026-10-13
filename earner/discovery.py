@@ -11,6 +11,7 @@ import urllib.request
 from datetime import datetime, timezone
 
 from .llm import BudgetExceeded, Refused
+from .memory import TOPICS, recall
 
 WEB = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 15},
        {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 15}]
@@ -138,6 +139,7 @@ def run(store, llm, ts, log=print, force=False):
         "it can sign logins with but never spends from; the owner's Solana wallet for payouts; scheduled "
         "runs every 2 hours on a home PC (no public server); no social media accounts.\n\n"
         f"Current results:\n{json.dumps(performance_summary(store), indent=1)}\n\n"
+        f"What the agent has learned so far:\n{recall(store, TOPICS) or '(nothing yet)'}\n\n"
         "Return 3-8 ideas. For each, api_probe_url must be a public GET URL that lists open work or "
         "status as JSON (empty string if none exists). Also include 1-3 ideas with category 'tuning' "
         "that improve the EXISTING strategies based on the results above (url/probe can be empty).")

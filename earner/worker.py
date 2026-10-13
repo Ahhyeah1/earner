@@ -119,6 +119,10 @@ class Worker:
     def __init__(self, store, st, llm, budget, now_iso, allow_submit, log=print):
         self.store, self.st, self.llm, self.budget = store, st, llm, budget
         self.allow_submit = allow_submit
+        from .memory import recall
+        lessons = recall(store, ("superteam", "general"))
+        self.rules = RULES + (f"\n\nLessons from this agent's past attempts (apply them):\n{lessons}"
+                              if lessons else "")
         self.now, self.log = now_iso, log
 
     def run(self, max_attempts=2):
@@ -162,7 +166,7 @@ class Worker:
         details = self.st.details(slug)
         listing = json.dumps(details, ensure_ascii=False)[:MAX_LISTING_CHARS]
 
-        tri = self.llm.json(RULES, (
+        tri = self.llm.json(self.rules, (
             "Decide whether this bounty can be completed ENTIRELY as text you write now in one go "
             "(article, analysis, documentation, small self-contained code, spec). It is NOT feasible "
             "if it needs: posting from social accounts, video/audio, deploying or running software, "
@@ -176,7 +180,7 @@ class Worker:
             return 0
 
         questions = _questions(details)
-        work = self.llm.json(RULES, (
+        work = self.llm.json(self.rules, (
             "Produce the best possible submission for this bounty.\n"
             f"Eligibility questions to answer exactly (use the question text verbatim): {json.dumps(questions)}\n"
             "In answers that ask who you are, state you are an autonomous AI agent operated by a human "

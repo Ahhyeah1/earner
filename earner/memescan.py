@@ -26,6 +26,7 @@ COST = 0.03                    # fees + slippage per side; meme pools are thin
 TAKE_PROFIT, STOP_LOSS = 1.00, -0.40      # +100% / -40%
 MAX_HOLD_DAYS = 7
 RUG_LIQUIDITY_USD = 5000       # an open position whose pool falls below this is treated as rugged
+MISSING_LIMIT = 3              # consecutive successful lookups without the token before it counts as gone
 
 FILTER = {"min_liquidity": 50_000, "min_volume_24h": 100_000, "min_age_h": 6, "max_age_d": 30,
           "max_fdv_to_liq": 40, "min_buys_24h": 150, "min_h1_change": -20, "max_rug_norm": 20,
@@ -50,8 +51,13 @@ def candidates():
     return list(dict.fromkeys(mints))
 
 
-def pairs_for(mints):
-    """Best (deepest) pair per mint, in batches of 30."""
+class FetchFailed(Exception):
+    pass
+
+
+def pairs_for(mints, strict=False):
+    """Best (deepest) pair per mint, in batches of 30. strict=True raises instead of silently
+    returning a partial result - required when the result decides whether a position is closed."""
     best = {}
     for i in range(0, len(mints), 30):
         try:
@@ -60,14 +66,16 @@ def pairs_for(mints):
                 liq = (p.get("liquidity") or {}).get("usd") or 0
                 if m and liq > ((best.get(m) or {}).get("liquidity") or {}).get("usd", -1):
                     best[m] = p
-        except Exception:
+        except Exception as e:
+            if strict:
+                raise FetchFailed(repr(e)) from None
             continue
     return best
 
 
-def passes(p, now_ms, rug=None):
+def passes(p, now_ms, rug=None, f=None):
     """(ok, reason). Market filters first (free); RugCheck is checked by the caller if these pass."""
-    f = FILTER
+    f = f or FILTER
     liq = (p.get("liquidity") or {}).get("usd") or 0
     vol = (p.get("volume") or {}).get("h24") or 0
     age_h = (now_ms - (p.get("pairCreatedAt") or now_ms)) / 3.6e6
@@ -133,11 +141,28 @@ def step(store, ts=None, fetch_pairs=pairs_for, fetch_candidates=candidates, rug
     now_ms = int(time.time() * 1000) if ts is None else int(datetime.fromisoformat(ts).timestamp() * 1000)
     rugcheck = rugcheck or (lambda m: _get(RUG.format(m)))
     b = book(store)
+    from .memory import params           # self-tuned values, always within memory.BOUNDS
+    P = params(store)
+    f = {**FILTER, "min_liquidity": P["meme.min_liquidity"], "min_volume_24h": P["meme.min_volume_24h"],
+         "min_buys_24h": P["meme.min_buys_24h"], "min_age_h": P["meme.min_age_h"]}
+    take_profit, stop_loss, max_hold = P["meme.take_profit"], P["meme.stop_loss"], P["meme.max_hold_days"]
 
-    # 1. mark open positions and apply exits
-    live = fetch_pairs(list(b["open"])) if b["open"] else {}
+    # 1. mark open positions and apply exits. A failed lookup is NOT evidence of a rug: only an
+    #    explicit pool reading below the threshold, or MISSING_LIMIT consecutive successful lookups
+    #    that don't contain the token, closes a position as rugged. (2026-10-12: one API failure wrote
+    #    off six healthy positions.)
+    try:
+        live = fetch_pairs(list(b["open"]), strict=True) if b["open"] else {}
+    except FetchFailed as e:
+        log(f"  meme paper: price lookup failed ({e}); positions left untouched this cycle")
+        live = None
     for mint, pos in list(b["open"].items()):
+        if live is None:
+            continue
         p = live.get(mint)
+        pos["missing"] = 0 if p else pos.get("missing", 0) + 1
+        if not p and pos["missing"] < MISSING_LIMIT:
+            continue
         liq = ((p or {}).get("liquidity") or {}).get("usd") or 0
         price = _price(p) if p else 0
         held_d = (now_ms - pos["opened_ms"]) / 8.64e7
@@ -147,8 +172,8 @@ def step(store, ts=None, fetch_pairs=pairs_for, fetch_candidates=candidates, rug
             value = pos["qty"] * price * (1 - COST)
             ret = value / pos["cost"] - 1
             pos["value"], pos["last_price"] = round(value, 4), price
-            reason = ("take profit" if ret >= TAKE_PROFIT else "stop loss" if ret <= STOP_LOSS
-                      else "time limit" if held_d >= MAX_HOLD_DAYS else None)
+            reason = ("take profit" if ret >= take_profit else "stop loss" if ret <= stop_loss
+                      else "time limit" if held_d >= max_hold else None)
             exit_value = value
         if reason:
             b["cash"] += exit_value
@@ -164,7 +189,7 @@ def step(store, ts=None, fetch_pairs=pairs_for, fetch_candidates=candidates, rug
     pairs = fetch_pairs(mints)
     ranked, rejected = [], {}
     for m, p in pairs.items():
-        ok, why = passes(p, now_ms)
+        ok, why = passes(p, now_ms, f=f)
         if not ok:
             rejected[why.split(" ")[0]] = rejected.get(why.split(" ")[0], 0) + 1
             continue
@@ -178,7 +203,7 @@ def step(store, ts=None, fetch_pairs=pairs_for, fetch_candidates=candidates, rug
             rug = rugcheck(m)
         except Exception:
             continue                                   # no safety report -> no trade
-        ok, why = passes(p, now_ms, rug)
+        ok, why = passes(p, now_ms, rug, f=f)
         if not ok:
             rejected["rugcheck"] = rejected.get("rugcheck", 0) + 1
             continue

@@ -27,7 +27,7 @@ def load_env(path=ROOT / ".env"):
 load_env()
 
 from . import llm as llm_mod  # noqa: E402  (llm reads credentials from the env loaded above)
-from . import discovery, evm, feed, memescan, paper, policy, sources, treasury  # noqa: E402
+from . import discovery, evm, feed, memescan, memory, paper, policy, sources, treasury  # noqa: E402
 from .bb_worker import BBWorker  # noqa: E402
 from .bountybook import BountyBook  # noqa: E402
 from .score import score  # noqa: E402
@@ -153,6 +153,11 @@ def _cycle(store, log):
     log(f"  tier={budget.tier} profit=${budget.profit_usd} llm_today_left=${budget.llm_today_left_usd} "
         f"trading_capital=${budget.trading_capital_usd}")
 
+    llm = None
+    memory.observe(store, ts)
+    for name in memory.check_health(store, ts):        # before any worker spends money
+        notes.append(f"Self-improvement: paused {name} after repeated failures (resume on the dashboard)")
+    store.commit()
     if not os.environ.get("ANTHROPIC_API_KEY"):
         notes.append("ANTHROPIC_API_KEY not set: bounty worker idle")
     elif budget.llm_today_left_usd < llm_mod.MAX_CALL_USD:
@@ -173,7 +178,8 @@ def _cycle(store, log):
 
         micro_left = (pol["hard_caps"].get("max_micro_jobs_per_day", 10)
                       - store.submissions_since(today, micro=True))
-        if budget.can("agent_bounties") and pol.get("allow_auto_submit") and micro_left > 0:
+        if ("bountybook" not in memory.paused(store) and budget.can("agent_bounties")
+                and pol.get("allow_auto_submit") and micro_left > 0):
             try:
                 BBWorker(store, BountyBook(), llm, ts, micro_left, log).run()
                 last_action = "worked agent bounties + BountyBook jobs"
@@ -190,6 +196,11 @@ def _cycle(store, log):
                     notes.append(f"{n} new money-making idea(s) found - review them on the dashboard")
             except Exception as e:
                 log(f"  discovery failed: {e!r}")
+    notes += memory.cycle(store, ts, llm, budget.llm_budget_left_usd - (llm.spent if llm else 0), log)
+    if any("credit balance is too low" in n for n in notes):
+        notes = [n for n in notes if "credit balance is too low" not in n]
+        notes.append("Anthropic API credits are used up: AI work is paused. Top up at console.anthropic.com "
+                     "-> Plans & Billing (the agent's own $5 cap still applies)")
     pending = len(store.ideas("proposed"))
     if pending:
         notes.append(f"{pending} discovered idea(s) waiting for your approve/reject")
