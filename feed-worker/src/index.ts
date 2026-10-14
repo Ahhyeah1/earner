@@ -178,18 +178,18 @@ app.use("/v1/token-risk", pay);
 
 // Free live demo on one fixed token (cached), so buyers can see a real answer before paying.
 app.get("/v1/token-risk/demo", async (c) => {
-  const demo = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";      // BONK
+  const demo = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm";      // WIF (dogwifhat)
   const cache = (caches as any).default as Cache, key = new Request(`https://cache.local/risk-demo/${demo}`);
   const hit = await cache.match(key);
   if (hit) return new Response(hit.body, hit);
   try {
-    const res = c.json({ demo: true, note: "Free demo on BONK. Any other mint: GET /v1/token-risk?mint=... (x402)",
+    const res = c.json({ demo: true, demo_note: "Free demo on WIF. Any other mint: GET /v1/token-risk?mint=... (x402, $0.002)",
                          ...(await assessMint(demo, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com")) });
     res.headers.set("Cache-Control", "max-age=600");
     c.executionCtx.waitUntil(cache.put(key, res.clone()));
     return res;
-  } catch {
-    return c.json({ error: "chain data temporarily unavailable" }, 503);
+  } catch (e: any) {
+    return c.json({ error: "chain data temporarily unavailable", detail: String(e?.message ?? e).replace(/https?:\/\/\S+/g, "[rpc]").slice(0, 160) }, 503);
   }
 });
 

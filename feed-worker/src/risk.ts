@@ -108,7 +108,9 @@ export async function assessMint(mint: string, rpcUrl: string): Promise<Assessme
   let largest: { amount: number }[] | null = null;
   try {
     const decimals = Number(v.data.parsed.info.decimals || 0);
-    const res = await rpc(rpcUrl, "getTokenLargestAccounts", [mint]);
+    let res;
+    try { res = await rpc(rpcUrl, "getTokenLargestAccounts", [mint]); }
+    catch { await new Promise((r) => setTimeout(r, 800)); res = await rpc(rpcUrl, "getTokenLargestAccounts", [mint]); }  // index can be briefly overloaded
     largest = (res?.value || []).map((a: any) => ({ amount: Number(a.amount) / 10 ** decimals }));
   } catch { largest = null; }                 // many free RPCs don't serve this; report "not checked"
   return assess(mint, v.data.parsed.info, v.owner, largest);
