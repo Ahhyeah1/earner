@@ -4,6 +4,8 @@ Read-only view of everything the agent does, plus three controls (run now / paus
 that only drive the Windows scheduled task. Binds to localhost only.
 """
 import json
+import os
+import urllib.parse
 import subprocess
 import webbrowser
 from collections import defaultdict
@@ -111,6 +113,10 @@ def state():
                                                                        "why", "probe")}}
                       for r in store.ideas()],
             "last_discovery": store.kv_get("last_discovery"),
+            "assist": _rows(store.db.execute("SELECT id, ts, listing_id, slug, decision, reason, payload FROM submissions "
+                                             "WHERE listing_id LIKE 'assist:%' AND decision IN ('ready','owner_submitted') "
+                                             "ORDER BY id DESC LIMIT 20")),
+            "notify": {"topic": os.environ.get("EARNER_NTFY_TOPIC"), "last": store.kv_get("last_notification")},
             "memory": {
                 "lessons": _rows(store.db.execute("SELECT ts, topic, text FROM memories WHERE active=1 AND kind='lesson' ORDER BY id DESC LIMIT 20")),
                 "adjustments": _rows(store.db.execute("SELECT ts, topic, text FROM memories WHERE kind='adjustment' ORDER BY id DESC LIMIT 20")),
@@ -140,6 +146,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
+        elif self.path.startswith("/assist/"):
+            return self._assist_page(self.path.split("/")[2])
         elif self.path == "/api/state":
             try:
                 self._send(200, state())
@@ -152,6 +160,32 @@ class Handler(BaseHTTPRequestHandler):
         # Custom header = a cross-site page can't trigger these with a plain form post.
         if self.headers.get("X-Earner") != "1":
             return self._send(403, {"error": "forbidden"})
+        if self.path.startswith("/api/assist/"):
+            parts = self.path.split("/")              # /api/assist/<id>/<done|skip>
+            if len(parts) != 5 or parts[4] not in ("done", "skip"):
+                return self._send(404, {"error": "not found"})
+            st = Store(DB)
+            try:
+                n = st.db.execute("UPDATE submissions SET decision=? WHERE listing_id=? AND decision='ready'",
+                                  ("owner_submitted" if parts[4] == "done" else "owner_skipped",
+                                   "assist:" + urllib.parse.unquote(parts[3]))).rowcount
+                st.commit()
+            finally:
+                st.db.close()
+            return self._send(200 if n else 404, {"ok": bool(n)})
+        if self.path == "/api/notify/test":
+            st = Store(DB)
+            try:
+                from . import notify
+                notify.ensure_topic()
+                import time as _t
+                notify.send(st, f"test-{_t.time()}", "Earner test notification",
+                            "If you can read this, notifications work.", tags=("white_check_mark",))
+                st.commit()
+                last = st.kv_get("last_notification") or {}
+            finally:
+                st.db.close()
+            return self._send(200, {"ok": True, "phone": last.get("phone"), "desktop": last.get("desktop")})
         if self.path.startswith("/api/strategy/") and self.path.endswith("/resume"):
             name = self.path.split("/")[3]
             st = Store(DB)
@@ -188,6 +222,24 @@ class Handler(BaseHTTPRequestHandler):
                            capture_output=True, text=True, timeout=30)
         self._send(200 if r.returncode == 0 else 500, {"ok": r.returncode == 0,
                                                        "output": (r.stdout + r.stderr).strip()})
+
+    def _assist_page(self, aid):
+        import html
+        st = Store(DB)
+        try:
+            row = st.db.execute("SELECT payload FROM submissions WHERE listing_id=? ORDER BY id DESC LIMIT 1",
+                                ("assist:" + urllib.parse.unquote(aid),)).fetchone()
+        finally:
+            st.db.close()
+        path = json.loads((row or {})["payload"] or "{}").get("path") if row else None
+        if not path or not Path(path).exists() or ROOT / "work" not in Path(path).resolve().parents:
+            return self._send(404, b"not found", "text/plain")
+        body = html.escape(Path(path).read_text(encoding="utf-8"))
+        page = ("<!doctype html><meta charset=utf-8><title>Submission pack</title>"
+                "<body style='font:15px/1.6 system-ui;max-width:860px;margin:30px auto;padding:0 16px'>"
+                "<button onclick=\"navigator.clipboard.writeText(document.querySelector('pre').innerText)\">Copy all</button>"
+                f"<pre style='white-space:pre-wrap'>{body}</pre></body>")
+        self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
 
     def log_message(self, *a):
         pass

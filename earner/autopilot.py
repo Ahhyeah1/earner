@@ -27,7 +27,7 @@ def load_env(path=ROOT / ".env"):
 load_env()
 
 from . import llm as llm_mod  # noqa: E402  (llm reads credentials from the env loaded above)
-from . import discovery, evm, feed, memescan, memory, paper, policy, sources, treasury  # noqa: E402
+from . import assist, discovery, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
 from .bb_worker import BBWorker  # noqa: E402
 from .bountybook import BountyBook  # noqa: E402
 from .score import score  # noqa: E402
@@ -50,6 +50,30 @@ def scout(store, ts, log=print):
         store.mark_gone(sorted(ok), ts)
     store.commit()
     return len(opps), new
+
+
+def _notify_owner(store, ts, notes, llm):
+    """Phone/desktop alerts: only when the owner is needed, or money arrived. Each alert is sent once."""
+    send = lambda key, title, msg, **kw: notify.send(store, key, title, msg, ts=ts, **kw)  # noqa: E731
+    income = round(store.total("ledger"), 2)
+    seen = store.kv_get("notified_income") or 0
+    if income > seen + 0.009:
+        send(f"income-{income}", f"Money arrived: +${income - seen:,.2f}",
+             f"Total earned so far: ${income:,.2f}. Details on the dashboard.", priority=4, tags=("moneybag", "tada"))
+        store.kv_set("notified_income", income)
+    if any("credits are used up" in n for n in notes) and not (llm and "gemini" in llm.used):
+        send("ai-down", "The agent can't think right now",
+             "Claude credits are used up and Gemini didn't answer. Top up Anthropic credits or raise the Gemini cap.",
+             priority=4, tags=("warning",), daily=True)
+    for name, p in memory.paused(store).items():
+        send(f"paused-{name}-{p['since']}", f"Paused {name}", p["reason"][:200], tags=("pause_button",))
+    if any(n.startswith("GRANT OPEN") for n in notes):
+        send("grant-open", "Superteam grant is open again", "Your application is ready in grant/. Submit it now.",
+             priority=5, tags=("moneybag",))
+    for idea in store.ideas("proposed"):
+        send(f"idea-{idea['id']}", "New money-making idea to review", f"{idea['name']} (score {idea['score']})",
+             tags=("bulb",))
+    store.commit()
 
 
 WATCHED_GRANT = "agentic-engineering"
@@ -103,6 +127,7 @@ def _cycle(store, log):
     ts = sources.now().isoformat(timespec="seconds")
     today = ts[:10]
     pol = policy.load()
+    notify.ensure_topic()
     notes = []
     log(f"[{ts}] cycle")
 
@@ -172,6 +197,17 @@ def _cycle(store, log):
         except Exception as e:
             log(f"  worker failed: {e!r}")
             notes.append(f"worker error: {e!r}"[:200])
+        # Human-only bounties: prepare submission packs for the owner (never submitted by the agent)
+        assist_cap = pol["hard_caps"].get("max_assist_per_day", assist.DEFAULT_PER_DAY)
+        ready_today = store.db.execute("SELECT COUNT(*) FROM submissions WHERE listing_id LIKE 'assist:%' AND "
+                                       "decision='ready' AND ts>=?", (today,)).fetchone()[0]
+        if "assist" not in memory.paused(store) and ready_today < assist_cap:
+            try:
+                assist.prepare(store, llm, ts, assist_cap - ready_today, log,
+                               notify=lambda key, title, msg, **kw: notify.send(store, key, title, msg, ts=ts, **kw))
+            except Exception as e:
+                log(f"  assist failed: {e!r}")
+            store.commit()
         if st.registered and not store.kv_get("claimed"):
             notes.append(f"Claim payouts once at {st.claim_url}")
         store.commit()
@@ -212,6 +248,7 @@ def _cycle(store, log):
     pending = len(store.ideas("proposed"))
     if pending:
         notes.append(f"{pending} discovered idea(s) waiting for your approve/reject")
+    _notify_owner(store, ts, notes, llm)
 
     if budget.live_trading:
         notes.append(f"LIVE TRADING UNLOCKED with ${budget.trading_capital_usd} - live executor is not "

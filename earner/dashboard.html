@@ -244,6 +244,10 @@ pre.log { margin: 0; max-height: 480px; overflow: auto; font: 12px/1.55 ui-monos
 
   <!-- HOME -->
   <section class="view active" id="v-home">
+    <div class="card section" id="ready-card" style="display:none;border:2px solid var(--accent)">
+      <h2>🎁 Ready for you <span class="tag">bounties the agent prepared — only you can submit these</span></h2>
+      <div id="ready"></div>
+    </div>
     <div id="alerts" class="section"></div>
     <div class="grid tiles section">
       <div class="card tile big" data-go="earn"><div class="label">Profit</div><div class="value" id="k-profit">—</div><div class="note">Income minus all costs</div></div>
@@ -319,6 +323,8 @@ pre.log { margin: 0; max-height: 480px; overflow: auto; font: 12px/1.55 ui-monos
     <div class="card section"><h2>New ways to earn, found by the agent <span class="tag" id="disc-when"></span></h2>
       <div class="scroll"><table><thead><tr><th class="num">Score</th><th>Idea</th><th>How it earns</th><th>Needs</th><th class="num">Est. /mo</th><th>Decision</th></tr></thead><tbody id="t-ideas"></tbody></table></div>
     </div>
+    <div class="card section"><h2>📱 Notifications <span class="tag">only when you're needed, or money arrives</span></h2>
+      <div id="notify-box"></div></div>
     <div class="card section"><h2>Wallets &amp; rules <span class="tag">policy.json, owner-controlled</span></h2><dl class="kv" id="rules"></dl></div>
   </section>
 
@@ -518,7 +524,24 @@ function render(S) {
   if (view === "log") { const lg = $("log"), atB = lg.scrollTop + lg.clientHeight >= lg.scrollHeight - 8; lg.textContent = S.log.join("\n") || "No log yet."; if (atB) lg.scrollTop = lg.scrollHeight; }
 }
 
+function renderReady(S) {
+  const ready = (S.assist || []).filter((r) => r.decision === "ready");
+  $("ready-card").style.display = ready.length ? "" : "none";
+  $("ready").replaceChildren(...ready.map((r) => {
+    const p = JSON.parse(r.payload || "{}"), id = r.listing_id.slice(7);
+    return el("div", { class: "lesson", style: "align-items:center" },
+      el("span", { class: "t", text: usd(p.reward || 0, 0) }),
+      el("div", { style: "flex:1" }, el("div", { style: "font-weight:700", text: r.slug }),
+        el("div", { class: "muted", style: "font-size:12.5px", text: r.reason })),
+      el("a", { href: `/assist/${encodeURIComponent(id)}`, target: "_blank", rel: "noopener" }, el("button", { class: "small primary", text: "Open pack" })),
+      el("a", { href: p.url, target: "_blank", rel: "noopener" }, el("button", { class: "small", text: "Listing ↗" })),
+      el("button", { class: "small", text: "✓ Submitted", onclick: (e) => { act(`/api/assist/${encodeURIComponent(id)}/done`, e.currentTarget); confetti(80); } }),
+      el("button", { class: "small", text: "Skip", onclick: (e) => act(`/api/assist/${encodeURIComponent(id)}/skip`, e.currentTarget) }));
+  }));
+}
+
 function renderHome(S, st, T, MS, lessons) {
+  renderReady(S);
   const box = $("alerts"); box.replaceChildren();
   const add = (text, kind, link) => { const c = { action: "var(--accent)", error: "var(--critical)", info: "var(--muted)" }[kind];
     const body = el("div", {}, text); if (link) body.append(" ", el("a", { href: link, target: "_blank", rel: "noopener", text: link }));
@@ -642,6 +665,14 @@ function renderIdeas(S) {
     el("td", {}, i.status === "proposed" ? el("span", {}, el("button", { class: "small primary", text: "Approve", onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/approve`, e.currentTarget) }), " ",
       el("button", { class: "small", text: "Reject", onclick: (e) => act(`/api/idea/${encodeURIComponent(i.id)}/reject`, e.currentTarget) })) : el("span", { class: "badge", text: i.status }))))
     : [el("tr", {}, el("td", { colspan: 6, class: "muted", text: "No ideas yet. The agent researches new ways to earn once a week (needs AI credits)." }))]));
+  const N = S.notify || {}, last = N.last;
+  $("notify-box").replaceChildren(
+    el("div", { style: "font-size:13.5px", text: N.topic ? "Phone: install the free 'ntfy' app (iOS / Android), tap +, and subscribe to this private topic:" : "The topic is created on the next cycle." }),
+    N.topic ? el("div", { style: "display:flex;gap:8px;align-items:center;margin:8px 0" },
+      el("code", { style: "background:var(--surface-2);padding:6px 10px;border-radius:10px;font-size:13px", text: N.topic }),
+      el("button", { class: "small", text: "Copy", onclick: () => navigator.clipboard.writeText(N.topic) }),
+      el("button", { class: "small primary", text: "Send test", onclick: async (e) => { if (await act("/api/notify/test", e.currentTarget)) toast("📱 Test sent to your phone and desktop", "good"); } })) : null,
+    el("div", { class: "muted", style: "font-size:12.5px", text: last ? `Last: "${last.title}" · phone ${last.phone ? "✓" : "✗"} · desktop ${last.desktop ? "✓" : "✗"}` : "Nothing sent yet." }));
   const C = S.caps, Fl = S.flags, kv = [["Auto-submit", Fl.allow_auto_submit ? "On" : "Off"], ["Live trading allowed", Fl.allow_live_trading ? "Yes" : "No"],
     ["Starting Claude budget", `$${Fl.bootstrap_llm_usd}`], ["Claude per day", `$${C.max_llm_usd_per_day}`], ["Submissions per day", C.max_submissions_per_day],
     ["Max trading capital", `$${C.max_trading_capital_usd}`], ["Kill switch at drawdown", `${C.trading_kill_drawdown_pct}%`]];

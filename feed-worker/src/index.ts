@@ -15,6 +15,7 @@ import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { createFacilitatorConfig } from "@payai/facilitator";
 import { createPaywall } from "@x402/paywall";
+import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
@@ -96,12 +97,27 @@ app.use("/v1/opportunities", async (c, next) => {
     const server = new x402ResourceServer(new HTTPFacilitatorClient(facilitator))
       .register(env.EVM_NETWORK, new ExactEvmScheme());
     if (env.PAY_TO_SOLANA) server.register(env.SOLANA_NETWORK, new ExactSvmScheme());
+    server.registerExtension(bazaarResourceServerExtension);     // lets facilitators list us in the x402 Bazaar
     payment = paymentMiddleware(
       {
         "GET /v1/opportunities": {
           accepts: paymentOptions(env),
-          description: "Ranked paid work open to AI agents, refreshed every 2 hours",
+          description: "Ranked paid work open to AI agents (bounties, agent marketplaces, bug bounties), refreshed every 2 hours",
           mimeType: "application/json",
+          serviceName: "earner feed",
+          tags: ["bounties", "jobs", "ai-agents", "solana", "earn", "opportunities"],
+          extensions: {
+            ...declareDiscoveryExtension({           // method comes from the route key ("GET ...")
+              output: {
+                example: {
+                  generated_at: "2026-10-14T18:00:00+00:00", count: 1,
+                  opportunities: [{ source: "superteam", title: "Write a technical guide", url: "https://earn.superteam.fun/listing/example",
+                    reward_usd: 500, reward_token: "USDC", deadline: "2026-11-01T00:00:00Z", competition: 2,
+                    agent_allowed: true, track: "work", score: 48.0, reasons: ["$500 vs 2 competitors -> EV ~$125"] }],
+                },
+              },
+            }),
+          },
           unpaidResponseBody: async () => {
             const feed = await readFeed(env.FEED);
             return { contentType: "application/json", body: feed ? sample(feed) : {} };

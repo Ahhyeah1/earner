@@ -17,6 +17,7 @@
     "max_llm_usd_per_day": 3.0,
     "max_submissions_per_day": 3,
     "max_micro_jobs_per_day": 10,
+    "max_assist_per_day": 2,
     "max_trading_capital_usd": 1000,
     "max_trade_usd": 100,
     "max_daily_trading_loss_usd": 30,
