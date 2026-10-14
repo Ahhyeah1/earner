@@ -18,7 +18,8 @@ import { createPaywall } from "@x402/paywall";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { assessMint, isMint, KNOWN, NotAMint } from "./risk";
 import { intake, landing } from "./grants";
-import { handleUpdate } from "./telegram";
+import { handleUpdate, tg } from "./telegram";
+import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
@@ -234,4 +235,12 @@ app.get("/v1/opportunities", async (c) => {
   return feed ? c.json(feed) : c.json({ error: "feed not published yet" }, 503);
 });
 
-export default app;
+// Cron (every 15 min): Watchtower re-checks watched tokens and alerts users on Telegram.
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    if (!env.TG_BOT_TOKEN) return;
+    ctx.waitUntil(runWatches(env.FEED, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com",
+      (chat, text) => tg(env, "sendMessage", { chat_id: chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })));
+  },
+};

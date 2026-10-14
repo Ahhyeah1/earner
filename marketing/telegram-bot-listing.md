@@ -21,6 +21,7 @@ Before you ape in, check the contract. Send @Rug1CheckSolBot any Solana token mi
 • Pause switch & changeable metadata
 • Holder concentration — how much do the top wallets hold?
 
+Watchtower: /watch <mint> and the bot alerts you if the contract turns dangerous later (mint/freeze authority comes back, risky extensions, big holder moves). 1 free watch; more via Stars.
 Works in groups: add the bot and type /check <mint>.
 5 free checks per day; more via Telegram Stars. No wallet connection, no sign-up.
 Not financial advice: contract checks can't see liquidity pulls or team behaviour.

@@ -13,7 +13,6 @@ Three layers, from cheap and automatic to considered:
 Limits: the agent can only tune parameters listed in BOUNDS, only within those bounds, and never
 touches policy.json, real-money settings, or its own code.
 """
-import json
 from datetime import datetime, timedelta, timezone
 
 TOPICS = ("superteam", "bountybook", "meme", "feed", "discovery", "general")

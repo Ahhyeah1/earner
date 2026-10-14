@@ -12,6 +12,8 @@
     "EVM_NETWORK": "eip155:8453",
     "SOLANA_NETWORK": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
   },
+  // Watchtower: re-check watched tokens every 15 minutes (src/watch.ts)
+  "triggers": { "crons": ["*/15 * * * *"] },
   "kv_namespaces": [
     // Created by `npm run setup` (scripts/setup.ps1); the id is filled in there.
     { "binding": "FEED", "id": "9780b8ddca354129a6c859a81a1d8340" }

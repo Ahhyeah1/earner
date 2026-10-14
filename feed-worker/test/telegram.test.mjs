@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const T = await import(process.env.TG_BUNDLE);
 
 const MINT = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm";
-function fakeKV() { const m = new Map(); return { m, get: async (k) => m.get(k) ?? null, put: async (k, v) => { m.set(k, v); } }; }
+function fakeKV() { const m = new Map(); return { m, get: async (k, t) => { const v = m.get(k) ?? null; return t === "json" && v != null ? JSON.parse(v) : v; }, put: async (k, v) => { m.set(k, v); } }; }
 function world({ rpcFails = false } = {}) {
   const sent = [];
   globalThis.caches = { default: { match: async () => undefined, put: async () => {} } };
@@ -65,4 +65,70 @@ test("chain failure gives the check back", async () => {
   await T.handleUpdate(msg(MINT), env);
   const key = [...env.FEED.m.keys()].find((k) => k.startsWith("tg:free:7:"));
   assert.equal(env.FEED.m.get(key), "0");
+});
+
+// ---- Watchtower ----
+const W = T.W;
+const snap = (o = {}) => ({ mint_authority: null, freeze_authority: null, extensions: [], flags: [], top1: 20, top10: 50, level: "low", ...o });
+const assessment = (o = {}) => ({ mint: MINT, level: o.level || "low", score: 0, checks: o.checks || [],
+  facts: { mint_authority: o.mint_authority ?? null, freeze_authority: null, extensions: [], top1_pct: "top1" in o ? o.top1 : 20, top10_pct: "top1" in o && o.top1 == null ? null : 50 } });
+
+test("diff: dangerous changes alert, small drift doesn't", () => {
+  assert.equal(W.diff(snap(), snap({ top1: 24, top10: 55 })).length, 0);
+  assert.match(W.diff(snap(), snap({ mint_authority: "Evil111" })).join(), /RE-ENABLED/);
+  assert.match(W.diff(snap(), snap({ freeze_authority: "Evil111" })).join(), /Freeze/);
+  assert.match(W.diff(snap(), snap({ top1: 35 })).join(), /jumped/);
+  assert.match(W.diff(snap({ top1: 40 }), snap({ top1: 15 })).join(), /dropped/);
+});
+
+test("one free watch, then Stars watch credits", async () => {
+  const { sent, env } = world();
+  await T.handleUpdate(msg(`/watch ${MINT}`), env);
+  assert.match(sent.at(-1).body.text, /Watching/);
+  await T.handleUpdate(msg(`/watch ${MINT}`), env);
+  assert.match(sent.at(-1).body.text, /already watching/);
+  const other = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";
+  await T.handleUpdate(msg(`/watch ${other}`), env);
+  assert.ok(sent.at(-1).body.reply_markup.inline_keyboard.some((r) => r[0].callback_data === "buy:w5"), "offers watch pack");
+  await T.handleUpdate({ message: { message_id: 3, from: { id: 7 }, chat: { id: 7, type: "private" },
+    successful_payment: { invoice_payload: "pack:w5", total_amount: 75, telegram_payment_charge_id: "c2" } } }, env);
+  assert.equal(await env.FEED.get("tg:wcredits:7"), "5");
+  await T.handleUpdate({ callback_query: { id: "cb", data: `watch:${other}`, from: { id: 7 }, message: { chat: { id: 7 } } } }, env);
+  assert.equal(await env.FEED.get("tg:wcredits:7"), "4");
+  await T.handleUpdate(msg("/watches"), env);
+  assert.match(sent.at(-1).body.text, /\(free\)/);
+  await T.handleUpdate(msg(`/unwatch ${MINT}`), env);
+  assert.equal(W.mine(await W.load(env.FEED), 7).length, 1);
+});
+
+test("verdicts carry a watch button", async () => {
+  const { sent, env } = world();
+  await T.handleUpdate(msg(MINT), env);
+  assert.equal(sent.find((s) => /risk/.test(s.body.text || "")).body.reply_markup.inline_keyboard[0][0].callback_data, `watch:${MINT}`);
+});
+
+test("cron: baseline, quiet runs write nothing, change alerts, expiry ends", async () => {
+  const kv = fakeKV(); const out = []; let writes = 0;
+  const put = kv.put; kv.put = async (k, v) => { writes++; return put(k, v); };
+  const send = async (chat, text) => out.push(text);
+  const s = { watches: [] }; W.add(s, 7, 7, MINT, 0, 0); await W.save(kv, s); writes = 0;
+  let a = assessment();
+  const run = (now) => W.run(kv, "rpc", send, now, async () => a);
+  await run(1000); assert.equal(writes, 1);                        // baseline stored
+  await run(2000); await run(3000); assert.equal(writes, 1);       // nothing changed: no KV writes
+  a = assessment({ top1: null }); await run(4000); assert.equal(out.length, 0);   // holder lookup failed: not a change
+  a = assessment({ mint_authority: "Evil1111111111111111111111111111" }); await run(5000);
+  assert.match(out.at(-1), /RE-ENABLED/);
+  await run(6000); assert.equal(out.length, 1);                   // alert once, not every run
+  await run(4 * 86_400_000); assert.match(out.at(-1), /ended/);
+  assert.equal((await W.load(kv)).watches.length, 0);
+});
+
+test("cron checks a bounded batch per run", async () => {
+  const kv = fakeKV(); const s = { watches: [] };
+  for (let i = 0; i < 30; i++) s.watches.push({ uid: i, chat: i, mint: `M${String(i).padStart(2, "0")}`, until: 1e12, paid: true });
+  await W.save(kv, s);
+  let calls = 0;
+  const r = await W.run(kv, "rpc", async () => {}, 0, async () => { calls++; return assessment(); });
+  assert.equal(calls, W.TOKENS_PER_RUN); assert.equal(r.tokens, 30);
 });
