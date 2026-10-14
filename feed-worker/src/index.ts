@@ -16,6 +16,7 @@ import { ExactSvmScheme } from "@x402/svm/exact/server";
 import { createFacilitatorConfig } from "@payai/facilitator";
 import { createPaywall } from "@x402/paywall";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
+import { assessMint, isMint, KNOWN, NotAMint } from "./risk";
 import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
@@ -27,6 +28,8 @@ export type Bindings = {
   SOLANA_NETWORK: `${string}:${string}`;  // "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" (mainnet)
   PAYAI_API_KEY_ID?: string;
   PAYAI_API_KEY_SECRET?: string;
+  SOLANA_RPC?: string;               // optional secret: an RPC with a holder index (e.g. Helius) enables concentration checks
+  RISK_PRICE_USD?: string;           // default "0.002"
 };
 
 export type Opportunity = {
@@ -51,8 +54,8 @@ export function sample(feed: Feed): object {
   };
 }
 
-export function paymentOptions(env: Bindings) {
-  const price = `$${env.PRICE_USD}`;
+export function paymentOptions(env: Bindings, priceUsd: string = env.PRICE_USD) {
+  const price = `$${priceUsd}`;
   const opts: { scheme: "exact"; price: string; network: `${string}:${string}`; payTo: string }[] = [
     { scheme: "exact", price, network: env.EVM_NETWORK, payTo: env.PAY_TO_EVM },
   ];
@@ -70,6 +73,8 @@ app.get("/", (c) =>
     paid: { endpoint: "GET /v1/opportunities", price_usd: c.env.PRICE_USD, protocol: "x402",
             accepts: paymentOptions(c.env).map((o) => o.network) },
     free: ["GET /v1/sample", "GET /health"],
+    token_risk: { endpoint: "GET /v1/token-risk?mint=<solana mint>", price_usd: c.env.RISK_PRICE_USD || "0.002",
+                  what: "Contract-level rug/honeypot checks from public on-chain data, score 0-100 with reasons" },
     fields: ["source", "title", "url", "reward_usd", "reward_token", "deadline", "competition",
              "agent_allowed", "track", "score", "reasons"],
     note: "Scores are the agent's own estimate of expected payout per competitor. Not advice; check each listing's rules.",
@@ -88,7 +93,23 @@ app.get("/v1/sample", async (c) => {
 // Payment middleware is built on first use: Workers only expose env per request.
 let payment: MiddlewareHandler | undefined;
 
-app.use("/v1/opportunities", async (c, next) => {
+const RISK_EXAMPLE = {
+  mint: "So11111111111111111111111111111111111111112", score: 72, level: "critical",
+  checks: [{ id: "mint_authority", ok: false, severity: "critical", points: 35, detail: "Someone can mint unlimited new tokens and dilute holders." },
+           { id: "freeze_authority", ok: false, severity: "high", points: 30, detail: "Someone can freeze any holder's tokens (honeypot risk)." }],
+  facts: { token_program: "spl-token", decimals: 6, supply: 1000000000, mint_authority: "Ab...", freeze_authority: "Cd..." },
+  generated_at: "2026-10-14T18:00:00.000Z", method: "on-chain", disclaimer: "Contract-level checks; not financial advice.",
+};
+
+// Reject malformed input before anyone pays.
+app.use("/v1/token-risk", async (c, next) => {
+  if (!isMint(c.req.query("mint"))) {
+    return c.json({ error: "add ?mint=<Solana token mint address>", example: "/v1/token-risk?mint=" + Object.keys(KNOWN)[0] }, 400);
+  }
+  return next();
+});
+
+const pay = async (c: any, next: any) => {
   if (!payment) {
     const env = c.env;
     const facilitator = env.PAYAI_API_KEY_ID && env.PAYAI_API_KEY_SECRET
@@ -123,6 +144,24 @@ app.use("/v1/opportunities", async (c, next) => {
             return { contentType: "application/json", body: feed ? sample(feed) : {} };
           },
         },
+        "GET /v1/token-risk": {
+          accepts: paymentOptions(env, env.RISK_PRICE_USD || "0.002"),
+          description: "Solana token contract-risk check from on-chain data: mint/freeze authority, permanent delegate, "
+            + "transfer hooks and fees, pausability, mutable metadata, holder concentration. Score 0-100 with reasons.",
+          mimeType: "application/json",
+          serviceName: "earner token risk",
+          tags: ["solana", "token", "risk", "rug", "honeypot", "security", "trading"],
+          extensions: {
+            ...declareDiscoveryExtension({
+              input: { mint: "So11111111111111111111111111111111111111112" },
+              inputSchema: { properties: { mint: { type: "string", description: "SPL or Token-2022 mint address" } }, required: ["mint"] },
+              output: { example: RISK_EXAMPLE },
+            }),
+          },
+          unpaidResponseBody: async () => ({ contentType: "application/json", body: {
+            what: "Contract-level rug/honeypot check for a Solana token, from public on-chain data.",
+            price_usd: env.RISK_PRICE_USD || "0.002", example_response: RISK_EXAMPLE } }),
+        },
       },
       server,
       undefined,
@@ -133,6 +172,42 @@ app.use("/v1/opportunities", async (c, next) => {
     );
   }
   return payment(c, next);
+};
+app.use("/v1/opportunities", pay);
+app.use("/v1/token-risk", pay);
+
+// Free live demo on one fixed token (cached), so buyers can see a real answer before paying.
+app.get("/v1/token-risk/demo", async (c) => {
+  const demo = "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263";      // BONK
+  const cache = (caches as any).default as Cache, key = new Request(`https://cache.local/risk-demo/${demo}`);
+  const hit = await cache.match(key);
+  if (hit) return new Response(hit.body, hit);
+  try {
+    const res = c.json({ demo: true, note: "Free demo on BONK. Any other mint: GET /v1/token-risk?mint=... (x402)",
+                         ...(await assessMint(demo, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com")) });
+    res.headers.set("Cache-Control", "max-age=600");
+    c.executionCtx.waitUntil(cache.put(key, res.clone()));
+    return res;
+  } catch {
+    return c.json({ error: "chain data temporarily unavailable" }, 503);
+  }
+});
+
+app.get("/v1/token-risk", async (c) => {
+  const mint = c.req.query("mint")!;
+  const cache = (caches as any).default as Cache, key = new Request(`https://cache.local/risk/${mint}`);
+  const hit = await cache.match(key);
+  if (hit) return new Response(hit.body, hit);
+  try {
+    const result = await assessMint(mint, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com");
+    const res = c.json(result);
+    res.headers.set("Cache-Control", "max-age=600");
+    c.executionCtx.waitUntil(cache.put(key, res.clone()));
+    return res;
+  } catch (e: any) {
+    if (e instanceof NotAMint) return c.json({ error: "that address is not a token mint" }, 404);
+    return c.json({ error: "chain data temporarily unavailable, try again shortly" }, 503);
+  }
 });
 
 app.get("/v1/opportunities", async (c) => {
