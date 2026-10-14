@@ -158,8 +158,8 @@ def _cycle(store, log):
     for name in memory.check_health(store, ts):        # before any worker spends money
         notes.append(f"Self-improvement: paused {name} after repeated failures (resume on the dashboard)")
     store.commit()
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        notes.append("ANTHROPIC_API_KEY not set: bounty worker idle")
+    if not llm_mod.available():
+        notes.append("No AI key set (ANTHROPIC_API_KEY or GEMINI_API_KEY): bounty worker idle")
     elif budget.llm_today_left_usd < llm_mod.MAX_CALL_USD:
         notes.append("LLM budget for today/lifetime exhausted: worker idle until earnings raise it")
     else:
@@ -197,6 +197,14 @@ def _cycle(store, log):
             except Exception as e:
                 log(f"  discovery failed: {e!r}")
     notes += memory.cycle(store, ts, llm, budget.llm_budget_left_usd - (llm.spent if llm else 0), log)
+    if llm is not None and llm.down:
+        why = "; ".join(f"{p}: {r[:120]}" for p, r in llm.down.items())
+        log(f"  ai providers down this cycle: {why}")
+        if "gemini" in llm.used:
+            notes.append("Claude was unavailable this cycle, so the agent worked on Gemini (backup). "
+                         + ("Claude credits are used up - top up at console.anthropic.com." if "credit" in why else ""))
+        elif "claude" in llm.down and not os.environ.get("GEMINI_API_KEY"):
+            notes.append("Claude is unavailable and no Gemini backup key is set (GEMINI_API_KEY in .env).")
     if any("credit balance is too low" in n for n in notes):
         notes = [n for n in notes if "credit balance is too low" not in n]
         notes.append("Anthropic API credits are used up: AI work is paused. Top up at console.anthropic.com "
