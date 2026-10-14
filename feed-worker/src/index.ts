@@ -17,6 +17,7 @@ import { createFacilitatorConfig } from "@payai/facilitator";
 import { createPaywall } from "@x402/paywall";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { assessMint, isMint, KNOWN, NotAMint } from "./risk";
+import { intake, landing } from "./grants";
 import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
@@ -79,6 +80,10 @@ app.get("/", (c) =>
              "agent_allowed", "track", "score", "reasons"],
     note: "Scores are the agent's own estimate of expected payout per competitor. Not advice; check each listing's rules.",
   }));
+
+// Grant-application service (landing page + intake form)
+app.get("/grants", (c) => c.html(landing()));
+app.post("/grants/intake", (c) => intake(c.req.raw, c.env.FEED));
 
 app.get("/health", async (c) => {
   const feed = await readFeed(c.env.FEED);

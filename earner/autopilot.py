@@ -27,7 +27,7 @@ def load_env(path=ROOT / ".env"):
 load_env()
 
 from . import llm as llm_mod  # noqa: E402  (llm reads credentials from the env loaded above)
-from . import assist, discovery, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
+from . import assist, discovery, grantsvc, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
 from .bb_worker import BBWorker  # noqa: E402
 from .bountybook import BountyBook  # noqa: E402
 from .score import score  # noqa: E402
@@ -232,6 +232,11 @@ def _cycle(store, log):
                     notes.append(f"{n} new money-making idea(s) found - review them on the dashboard")
             except Exception as e:
                 log(f"  discovery failed: {e!r}")
+    try:      # grant-writing service: intakes, payments, drafts, leads (owner sends everything)
+        grantsvc.cycle(store, llm, ts, notify=lambda key, title, msg, **kw: notify.send(store, key, title, msg, ts=ts, **kw),
+                       log=log, leads_per_day=pol["hard_caps"].get("max_leads_per_day", 3))
+    except Exception as e:
+        log(f"  grants: failed ({e!r})")
     notes += memory.cycle(store, ts, llm, budget.llm_budget_left_usd - (llm.spent if llm else 0), log)
     if llm is not None and llm.down:
         why = "; ".join(f"{p}: {r[:120]}" for p, r in llm.down.items())

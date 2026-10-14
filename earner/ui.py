@@ -114,7 +114,8 @@ def state():
                       for r in store.ideas()],
             "last_discovery": store.kv_get("last_discovery"),
             "assist": _rows(store.db.execute("SELECT id, ts, listing_id, slug, decision, reason, payload FROM submissions "
-                                             "WHERE listing_id LIKE 'assist:%' AND decision IN ('ready','owner_submitted') "
+                                             "WHERE (listing_id LIKE 'assist:%' OR listing_id LIKE 'lead:%' OR listing_id LIKE 'client:%') "
+                                             "AND decision IN ('ready','owner_submitted') "
                                              "ORDER BY id DESC LIMIT 20")),
             "notify": {"topic": os.environ.get("EARNER_NTFY_TOPIC"), "last": store.kv_get("last_notification")},
             "memory": {
@@ -146,8 +147,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             self._send(200, HTML.read_bytes(), "text/html; charset=utf-8")
-        elif self.path.startswith("/assist/"):
-            return self._assist_page(self.path.split("/")[2])
+        elif self.path.startswith("/pack/"):
+            return self._assist_page(urllib.parse.unquote(self.path.split("/", 2)[2]))
         elif self.path == "/api/state":
             try:
                 self._send(200, state())
@@ -160,15 +161,15 @@ class Handler(BaseHTTPRequestHandler):
         # Custom header = a cross-site page can't trigger these with a plain form post.
         if self.headers.get("X-Earner") != "1":
             return self._send(403, {"error": "forbidden"})
-        if self.path.startswith("/api/assist/"):
-            parts = self.path.split("/")              # /api/assist/<id>/<done|skip>
+        if self.path.startswith("/api/pack/"):
+            parts = self.path.split("/")              # /api/pack/<urlencoded listing id>/<done|skip>
             if len(parts) != 5 or parts[4] not in ("done", "skip"):
                 return self._send(404, {"error": "not found"})
             st = Store(DB)
             try:
                 n = st.db.execute("UPDATE submissions SET decision=? WHERE listing_id=? AND decision='ready'",
                                   ("owner_submitted" if parts[4] == "done" else "owner_skipped",
-                                   "assist:" + urllib.parse.unquote(parts[3]))).rowcount
+                                   urllib.parse.unquote(parts[3]))).rowcount
                 st.commit()
             finally:
                 st.db.close()
@@ -228,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
         st = Store(DB)
         try:
             row = st.db.execute("SELECT payload FROM submissions WHERE listing_id=? ORDER BY id DESC LIMIT 1",
-                                ("assist:" + urllib.parse.unquote(aid),)).fetchone()
+                                (aid,)).fetchone()
         finally:
             st.db.close()
         path = json.loads((row or {})["payload"] or "{}").get("path") if row else None
