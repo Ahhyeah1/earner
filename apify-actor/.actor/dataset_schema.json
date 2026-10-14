@@ -1,0 +1,22 @@
+{
+  "actorSpecification": 1,
+  "views": {
+    "overview": {
+      "title": "Risk overview",
+      "transformation": { "fields": ["mint", "level", "score", "redFlags", "top1Pct", "top10Pct", "coverage", "error"] },
+      "display": {
+        "component": "table",
+        "properties": {
+          "mint": { "label": "Mint", "format": "text" },
+          "level": { "label": "Risk", "format": "text" },
+          "score": { "label": "Score", "format": "number" },
+          "redFlags": { "label": "Red flags", "format": "array" },
+          "top1Pct": { "label": "Top holder %", "format": "number" },
+          "top10Pct": { "label": "Top 10 %", "format": "number" },
+          "coverage": { "label": "Coverage", "format": "text" },
+          "error": { "label": "Error", "format": "text" }
+        }
+      }
+    }
+  }
+}

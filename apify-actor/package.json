@@ -1,0 +1,11 @@
+{
+  "name": "solana-token-rug-check",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Apify Actor: on-chain rug/honeypot checks for Solana tokens (backend: earner-feed worker).",
+  "main": "main.js",
+  "scripts": { "start": "node main.js" },
+  "dependencies": { "apify": "^3.7.2" },
+  "license": "MIT"
+}

@@ -2,6 +2,7 @@
 // Free checks per user per day; more via Telegram Stars (XTR), Telegram's required currency for digital goods.
 import { assessMint, isMint, type Assessment } from "./risk";
 import * as W from "./watch";
+import * as E from "./events";
 
 export type TgEnv = {
   FEED: KVNamespace; TG_BOT_TOKEN?: string; TG_SECRET?: string; SOLANA_RPC?: string; NTFY_TOPIC?: string;
@@ -120,12 +121,73 @@ Send me a token's mint address (or a pump.fun / solscan link) and I'll check it 
 👁 <b>Watchtower:</b> <code>/watch &lt;mint&gt;</code> and I'll alert you if the contract turns dangerous later (mint/freeze authority comes back, risky extensions, big holder moves). 1 free watch · /watches · /unwatch
 
 ${FREE_PER_DAY} free checks a day. /buy for more · /credits · /terms · /paysupport
-In groups: <code>/check &lt;mint&gt;</code>`;
+In groups: <code>/check &lt;mint&gt;</code> · admins can turn on <code>/guard on</code> (auto-warns on risky tokens)
+📡 Daily rug radar: earner-feed.earner-feed.workers.dev/rugs`;
 
 const TERMS = `<b>Terms</b>
 Checks are automated readings of public Solana data, provided as-is. They are not financial advice and can't detect every scam (e.g. liquidity pulls or team behaviour). Purchased checks never expire and are non-transferable. A watch credit covers one token for 30 days from when you start it; alerts are best-effort (checked about every 15 minutes) and can be delayed or missed. Refunds: /paysupport.`;
 
+/** Assessment with a 10-minute edge cache, shared by checks, the group guard and MCP. */
+export async function check(env: { SOLANA_RPC?: string }, mint: string): Promise<Assessment> {
+  const cache = (caches as any).default as Cache, key = new Request(`https://cache.local/risk/${mint}`);
+  const hit = await cache.match(key);
+  if (hit) return hit.json();
+  const a = await assessMint(mint, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com");
+  await cache.put(key, new Response(JSON.stringify(a), { headers: { "Cache-Control": "max-age=600", "content-type": "application/json" } }));
+  return a;
+}
+
+// ---- Group guard: opt-in per group (an admin types /guard on). Then every token address posted in the group
+// is checked silently; the bot only speaks up for HIGH/CRITICAL risk, so it never spams clean tokens.
+// Needs privacy mode off in @BotFather (or the bot as admin) to see ordinary messages.
+const guardKey = (chat: number) => `tg:guard:${chat}`;
+const ANON_ADMIN = 1087968824;           // Telegram's "GroupAnonymousBot" sender for anonymous admins
+
+async function isAdmin(env: TgEnv, m: any): Promise<boolean> {
+  if (m.sender_chat?.id === m.chat.id || m.from.id === ANON_ADMIN) return true;
+  const r = await tg(env, "getChatMember", { chat_id: m.chat.id, user_id: m.from.id });
+  return ["creator", "administrator"].includes(r?.result?.status);
+}
+
+async function guardCmd(env: TgEnv, m: any, text: string) {
+  const arg = (text.trim().split(/\s+/)[1] || "").toLowerCase();
+  const on = !!(await env.FEED.get(guardKey(m.chat.id)));
+  if (arg !== "on" && arg !== "off") {
+    return void (await tg(env, "sendMessage", { chat_id: m.chat.id, parse_mode: "HTML", text:
+      `🛡 Group guard is <b>${on ? "ON" : "OFF"}</b>.\nWhen on, I check every Solana token address posted here and warn only about HIGH/CRITICAL contract risk. Admins: <code>/guard on</code> or <code>/guard off</code>.` }));
+  }
+  if (!(await isAdmin(env, m))) return void (await tg(env, "sendMessage", { chat_id: m.chat.id, text: "Only group admins can change the guard." }));
+  if (arg === "on") await env.FEED.put(guardKey(m.chat.id), "1"); else await env.FEED.delete(guardKey(m.chat.id));
+  await tg(env, "sendMessage", { chat_id: m.chat.id, text: arg === "on"
+    ? "🛡 Guard ON. I'll warn here when someone posts a token with high-risk contract settings. (If I stay silent on plain messages, make me admin or turn off privacy mode.)"
+    : "Guard OFF. /check <mint> still works." });
+}
+
+async function guard(env: TgEnv, m: any, text: string) {
+  const mint = findMint(text);
+  if (!mint || !(await env.FEED.get(guardKey(m.chat.id)))) return;
+  // Same token in the same group: look at most once per 6 hours.
+  const cache = (caches as any).default as Cache, seen = new Request(`https://cache.local/guard/${m.chat.id}/${mint}`);
+  if (await cache.match(seen)) return;
+  await cache.put(seen, new Response("1", { headers: { "Cache-Control": "max-age=21600" } }));
+  let a: Assessment;
+  try { a = await check(env, mint); } catch { return; }
+  if (!E.flagged(a) || a.known) return;
+  await E.record(env.FEED, a, "guard").catch(() => {});
+  await tg(env, "sendMessage", { chat_id: m.chat.id, parse_mode: "HTML", text: `🛡 <b>Guard warning</b>\n\n${format(a)}`,
+    reply_to_message_id: m.message_id, link_preview_options: { is_disabled: true },
+    reply_markup: { inline_keyboard: [[{ text: "👁 Watch for changes", callback_data: `watch:${mint}` }]] } });
+}
+
+const JOINED = `👋 Thanks for adding me! Anyone can type <code>/check &lt;mint&gt;</code> for an on-chain rug check.
+🛡 Admins: <code>/guard on</code> makes me check every Solana token posted here and warn only about high-risk ones.`;
+
 export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
+  const joined = u.my_chat_member;
+  if (joined && joined.chat.type !== "private" && ["member", "administrator"].includes(joined.new_chat_member?.status)
+      && !["member", "administrator"].includes(joined.old_chat_member?.status)) {
+    return void (await tg(env, "sendMessage", { chat_id: joined.chat.id, text: JOINED, parse_mode: "HTML" }));
+  }
   if (u.pre_checkout_query) {
     const ok = !!PACKS[String(u.pre_checkout_query.invoice_payload || "").replace("pack:", "")];
     await tg(env, "answerPreCheckoutQuery", { pre_checkout_query_id: u.pre_checkout_query.id, ok,
@@ -190,7 +252,8 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     if (gone) await W.save(env.FEED, s);
     return void (await tg(env, "sendMessage", { chat_id: chat, text: gone ? "Stopped watching that token." : "You weren't watching that token. /watches" }));
   }
-  if (group && cmd !== "/check") return;               // in groups, only react to /check
+  if (group && cmd === "/guard") return void (await guardCmd(env, m, text));
+  if (group && cmd !== "/check") return void (await guard(env, m, text));   // groups: only /check, or the opt-in guard
   const mint = findMint(text);
   if (!mint) {
     if (!group) await tg(env, "sendMessage", { chat_id: chat, text: "Send me a Solana token mint address (32-44 characters), or /help." });
@@ -200,10 +263,8 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   if (!left) return void (await offer(env, chat));
   await tg(env, "sendChatAction", { chat_id: chat, action: "typing" });
   try {
-    const cache = (caches as any).default as Cache, key = new Request(`https://cache.local/risk/${mint}`);
-    const hit = await cache.match(key);
-    const a: Assessment = hit ? await hit.json() : await assessMint(mint, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com");
-    if (!hit) await cache.put(key, new Response(JSON.stringify(a), { headers: { "Cache-Control": "max-age=600", "content-type": "application/json" } }));
+    const a = await check(env, mint);
+    await E.record(env.FEED, a, "check").catch(() => {});
     const footer = left.free > 0 ? `\n\n${left.free} free checks left today` : `\n\n${left.credits} paid checks left`;
     await tg(env, "sendMessage", { chat_id: chat, text: format(a) + footer, parse_mode: "HTML",
       reply_to_message_id: m.message_id, link_preview_options: { is_disabled: true },
@@ -214,4 +275,3 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     await tg(env, "sendMessage", { chat_id: chat, text: msg, reply_to_message_id: m.message_id });
   }
 }
-export { W };          // for tests

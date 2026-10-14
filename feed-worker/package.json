@@ -6,7 +6,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild src/telegram.ts --bundle --format=esm --platform=neutral --outfile=.test-bundle.mjs --log-level=warning && node -e \"process.env.TG_BUNDLE=require('url').pathToFileURL(require('path').resolve('.test-bundle.mjs')).href; require('child_process').execFileSync(process.execPath,['--test','test/telegram.test.mjs'],{stdio:'inherit',env:process.env})\""
+    "test": "esbuild test/entry.ts --bundle --format=esm --platform=neutral --outfile=.test-bundle.mjs --log-level=warning && node -e \"process.env.TG_BUNDLE=require('url').pathToFileURL(require('path').resolve('.test-bundle.mjs')).href; require('child_process').execFileSync(process.execPath,['--test','test/telegram.test.mjs'],{stdio:'inherit',env:process.env})\""
   },
   "dependencies": {
     "@x402/core": "2.28.0",

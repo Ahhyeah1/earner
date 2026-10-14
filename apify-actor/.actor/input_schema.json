@@ -1,0 +1,21 @@
+{
+  "title": "Solana Token Rug Check input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "mints": {
+      "title": "Token mint addresses",
+      "type": "array",
+      "description": "Solana SPL / Token-2022 mint addresses to check (pump.fun and solscan links work too).",
+      "editor": "stringList",
+      "prefill": ["EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm"]
+    },
+    "onlyRisky": {
+      "title": "Only output risky tokens",
+      "type": "boolean",
+      "description": "Keep only tokens rated high or critical.",
+      "default": false
+    }
+  },
+  "required": ["mints"]
+}

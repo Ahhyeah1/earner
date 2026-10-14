@@ -18,7 +18,9 @@ import { createPaywall } from "@x402/paywall";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { assessMint, isMint, KNOWN, NotAMint } from "./risk";
 import { intake, landing } from "./grants";
-import { handleUpdate, tg } from "./telegram";
+import { handleUpdate, tg, check } from "./telegram";
+import * as E from "./events";
+import { handle as mcp } from "./mcp";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
 
@@ -36,6 +38,8 @@ export type Bindings = {
   TG_BOT_TOKEN?: string;             // secret: Telegram bot token from @BotFather
   TG_SECRET?: string;                // secret: verifies that webhook calls really come from Telegram
   NTFY_TOPIC?: string;               // secret: owner's ntfy topic for sale notifications
+  TG_CHANNEL?: string;               // optional: "@channel" the bot (as admin) posts the daily rug radar to
+  INTERNAL_KEY?: string;             // secret: lets our own Apify Actor call the risk check (Apify bills its users)
 };
 
 export type Opportunity = {
@@ -81,6 +85,9 @@ app.get("/", (c) =>
     free: ["GET /v1/sample", "GET /health"],
     token_risk: { endpoint: "GET /v1/token-risk?mint=<solana mint>", price_usd: c.env.RISK_PRICE_USD || "0.002",
                   what: "Contract-level rug/honeypot checks from public on-chain data, score 0-100 with reasons" },
+    mcp: { endpoint: "POST /mcp", tool: "check_solana_token", note: "Streamable HTTP MCP server, free with a daily limit" },
+    rug_radar: ["GET /rugs", "GET /rugs.json"],
+    telegram_bot: "https://t.me/Rug1CheckSolBot",
     fields: ["source", "title", "url", "reward_usd", "reward_token", "deadline", "competition",
              "agent_allowed", "track", "score", "reasons"],
     note: "Scores are the agent's own estimate of expected payout per competitor. Not advice; check each listing's rules.",
@@ -94,6 +101,29 @@ app.post("/tg/hook", async (c) => {
   const update = await c.req.json().catch(() => null);
   if (update) c.executionCtx.waitUntil(handleUpdate(update, c.env).catch(() => {}));
   return c.text("ok");
+});
+
+// MCP server: the rug check as a tool for AI assistants/agents (free, per-IP daily limit).
+app.options("/mcp", () => new Response(null, { headers: { "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, GET, OPTIONS", "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id" } }));
+app.all("/mcp", (c) => mcp(c.req.raw, { ip: c.req.header("cf-connecting-ip") || "?", check: (m) => check(c.env, m) }));
+
+// Rug radar: public log of flagged tokens (last 7 days).
+app.get("/rugs", async (c) => {
+  const res = c.html(E.page(await E.recent(c.env.FEED, 24 * 7), "Rug1CheckSolBot"));
+  res.headers.set("Cache-Control", "public, max-age=300");
+  return res;
+});
+app.get("/rugs.json", async (c) => c.json({ window_hours: 168, note: "Automated contract-level flags; not accusations or financial advice.",
+  events: await E.recent(c.env.FEED, 24 * 7) }, 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
+
+// Our Apify Actor's backend: same check, authenticated by a shared secret instead of x402.
+app.get("/internal/token-risk", async (c) => {
+  if (!c.env.INTERNAL_KEY || c.req.header("x-internal-key") !== c.env.INTERNAL_KEY) return c.json({ error: "forbidden" }, 403);
+  const mint = c.req.query("mint");
+  if (!isMint(mint)) return c.json({ error: "invalid mint" }, 400);
+  try { return c.json(await check(c.env, mint!)); }
+  catch (e: any) { return e instanceof NotAMint ? c.json({ error: "not a token mint" }, 404) : c.json({ error: "chain data unavailable" }, 503); }
 });
 
 // Grant-application service (landing page + intake form)
@@ -235,11 +265,25 @@ app.get("/v1/opportunities", async (c) => {
   return feed ? c.json(feed) : c.json({ error: "feed not published yet" }, 503);
 });
 
-// Cron (every 15 min): Watchtower re-checks watched tokens and alerts users on Telegram.
+export const DIGEST_CRON = "0 18 * * *";      // 18:00 UTC: US afternoon, European evening
+
+/** Daily rug-radar post to the owner's Telegram channel. */
+export async function postDigest(env: Bindings) {
+  if (!env.TG_BOT_TOKEN || !env.TG_CHANNEL) return "no channel";
+  const evs = await E.recent(env.FEED, 24);
+  const mints = [...new Set(evs.map((e) => e.mint))].slice(0, 10);
+  const text = E.digest(evs, env.SOLANA_RPC ? await E.names(env.SOLANA_RPC, mints) : {}, "Rug1CheckSolBot");
+  if (!text) return "nothing flagged";
+  const r: any = await tg(env, "sendMessage", { chat_id: env.TG_CHANNEL, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } });
+  return r?.ok ? "posted" : `failed: ${r?.description}`;
+}
+
+// Crons: every 15 min the Watchtower re-checks watched tokens; once a day the rug radar is posted.
 export default {
   fetch: app.fetch,
-  async scheduled(_event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+  async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
     if (!env.TG_BOT_TOKEN) return;
+    if (event.cron === DIGEST_CRON) return void ctx.waitUntil(postDigest(env).catch(() => {}));
     ctx.waitUntil(runWatches(env.FEED, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com",
       (chat, text) => tg(env, "sendMessage", { chat_id: chat, text, parse_mode: "HTML", link_preview_options: { is_disabled: true } })));
   },

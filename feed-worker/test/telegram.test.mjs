@@ -1,4 +1,4 @@
-// Run: npm test  (bundles src/telegram.ts with esbuild, then node:test)
+// Run: npm test  (bundles test/entry.ts with esbuild, then node:test)
 import { test } from "node:test";
 import assert from "node:assert/strict";
 const T = await import(process.env.TG_BUNDLE);
@@ -131,4 +131,72 @@ test("cron checks a bounded batch per run", async () => {
   let calls = 0;
   const r = await W.run(kv, "rpc", async () => {}, 0, async () => { calls++; return assessment(); });
   assert.equal(calls, W.TOKENS_PER_RUN); assert.equal(r.tokens, 30);
+});
+
+// ---- Group guard, rug radar, MCP ----
+const E = T.E, M = T.M;
+const RISKY = { ...{ result: { value: { owner: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  data: { parsed: { type: "mint", info: { mintAuthority: "Evil1111111111111111111111111111", freezeAuthority: "Evil1111111111111111111111111111", supply: "1000000000", decimals: 6 } } } } } } };
+function riskyWorld(admin = true) {
+  const w = world();
+  const base = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    url = String(url);
+    if (url.endsWith("/getChatMember")) return new Response(JSON.stringify({ ok: true, result: { status: admin ? "administrator" : "member" } }));
+    if (!url.includes("telegram") && !url.includes("ntfy") && JSON.parse(init.body).method === "getAccountInfo") return new Response(JSON.stringify(RISKY));
+    return base(url, init);
+  };
+  const store = new Map(); globalThis.caches = { default: { match: async (r) => store.get(r.url), put: async (r, res) => { store.set(r.url, res); } } };
+  w.env.FEED.delete = async (k) => { w.env.FEED.m.delete(k); };
+  return w;
+}
+
+test("guard: off by default, admin turns it on, warns only on risky tokens, once per token", async () => {
+  const { sent, env } = riskyWorld();
+  await T.handleUpdate(msg(`ape ${MINT}`, 9, "supergroup"), env);
+  assert.equal(sent.filter((s) => s.method === "sendMessage").length, 0, "silent while off");
+  await T.handleUpdate(msg("/guard on", 9, "supergroup"), env);
+  assert.match(sent.at(-1).body.text, /Guard ON/);
+  await T.handleUpdate(msg(`ape ${MINT}`, 9, "supergroup"), env);
+  assert.match(sent.at(-1).body.text, /Guard warning[\s\S]*CRITICAL/);
+  const n = sent.length;
+  await T.handleUpdate(msg(`again ${MINT}`, 9, "supergroup"), env);
+  assert.equal(sent.length, n, "same token not re-flagged");
+  assert.equal((await E.recent(env.FEED, 24))[0].src, "guard");
+});
+
+test("guard: non-admins can't toggle it; clean tokens stay silent", async () => {
+  const { sent, env } = riskyWorld(false);
+  await T.handleUpdate(msg("/guard on", 9, "supergroup"), env);
+  assert.match(sent.at(-1).body.text, /Only group admins/);
+  const w = world(); w.env.FEED.m.set("tg:guard:9", "1");
+  await T.handleUpdate(msg(`ape ${MINT}`, 9, "supergroup"), w.env);
+  assert.equal(w.sent.filter((s) => s.method === "sendMessage").length, 0);
+});
+
+test("risky private checks are logged once per day; digest and page render", async () => {
+  const { env } = riskyWorld();
+  await T.handleUpdate(msg(MINT), env); await T.handleUpdate(msg(MINT), env);
+  const evs = await E.recent(env.FEED, 24);
+  assert.equal(evs.length, 1);
+  assert.deepEqual(evs[0].flags, ["mint_authority", "freeze_authority"]);
+  const d = E.digest(evs, { [MINT]: "Evil &lt;b&gt; ($EVL)" }, "Rug1CheckSolBot");
+  assert.match(d, /1 token\(s\) flagged/); assert.match(d, /can mint more, can freeze wallets/);
+  assert.equal(E.digest([], {}, "x"), null);
+  assert.match(E.page(evs, "Rug1CheckSolBot"), /<td class="critical">critical/);
+});
+
+test("MCP: initialize, list, call, bad input, limit", async () => {
+  riskyWorld();
+  const call = async (body, ip = "1.1.1.1") => (await M.handle(new Request("https://x/mcp", { method: "POST", body: JSON.stringify(body) }),
+    { ip, check: async (m) => T.check({}, m) })).json();
+  const init = await call({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } });
+  assert.equal(init.result.protocolVersion, "2025-06-18");
+  assert.equal((await M.handle(new Request("https://x/mcp", { method: "POST", body: '{"jsonrpc":"2.0","method":"notifications/initialized"}' }), {})).status, 202);
+  assert.equal((await call({ jsonrpc: "2.0", id: 2, method: "tools/list" })).result.tools[0].name, "check_solana_token");
+  const r = await call({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: MINT } } });
+  assert.match(r.result.content[0].text, /CRITICAL risk/); assert.equal(r.result.structuredContent.level, "critical");
+  assert.equal((await call({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: "nope" } } })).result.isError, true);
+  for (let i = 0; i < M.FREE_PER_IP_DAY; i++) await call({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: MINT } } }, "2.2.2.2");
+  assert.match((await call({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: MINT } } }, "2.2.2.2")).result.content[0].text, /Free limit/);
 });

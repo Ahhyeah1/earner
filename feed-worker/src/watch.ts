@@ -2,6 +2,7 @@
 // All watches live in ONE KV key (one read per run, one write only when something changed) to stay far
 // inside the free KV limits.
 import { assessMint, type Assessment } from "./risk";
+import { record } from "./events";
 
 export type Snapshot = {
   mint_authority: string | null; freeze_authority: string | null; extensions: string[];
@@ -95,6 +96,7 @@ export async function run(kv: KVNamespace, rpc: string, send: Send, now = Date.n
     let a: Assessment;
     try { a = await assess(mint, rpc); } catch { continue; }          // transient failure: try next run
     const fresh = snapshot(a);
+    let logged = false;
     for (const w of byMint.get(mint)!) {
       // First sight: just record the baseline.
       if (!w.snap) { w.snap = fresh; changed = true; continue; }
@@ -106,6 +108,7 @@ export async function run(kv: KVNamespace, rpc: string, send: Send, now = Date.n
       const alerts = diff(w.snap, snap);
       if (alerts.length) {
         await send(w.chat, `🚨 <b>Watch alert</b> for <code>${mint}</code>\n\n${alerts.join("\n")}\n\n<i>Not financial advice.</i>`);
+        if (!logged) { logged = true; await record(kv, a, "watch", alerts, now).catch(() => {}); }
         w.snap = snap; changed = true;
       }
     }
