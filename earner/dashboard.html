@@ -497,7 +497,12 @@ function render(S) {
   $("taskpill").textContent = !task.exists ? "Schedule missing" : disabled ? "⏸ Paused" : running ? "Running a cycle…" : "Next run " + (task["Next Run Time"] || "—").replace(/:\d\d$/, "");
   $("lastcycle").textContent = "Last cycle " + (when(st.time) || "never");
   $("btn-pause").textContent = disabled ? "▶ Resume schedule" : "⏸ Pause schedule"; $("btn-pause").dataset.action = disabled ? "resume" : "pause";
-  $("btn-run").disabled = running;
+  $("btn-run").disabled = running || starting;
+  $("btn-run").textContent = running || starting ? "⏳ Cycle running…" : "▶ Run cycle now";
+  if (wasRunning && !running && !starting) { toast("✅ Cycle finished — numbers updated", "good"); }
+  wasRunning = running || starting;
+  if (running && !fastPoll) { fastPoll = setInterval(load, 4000); }       // refresh quickly while a cycle runs
+  if (!running && !starting && fastPoll) { clearInterval(fastPoll); fastPoll = null; }
 
   // tab counts
   $("c-earn").textContent = (S.submissions || []).length || ""; $("c-trade").textContent = (MS.open_positions || 0) || "";
@@ -687,7 +692,7 @@ function celebrate(S, st, T, MS) {
     if (snap.adj > prev.adj) toast("🔧 I adjusted myself — see the Memory tab");
     if (snap.lessons > prev.lessons) { toast("🧠 I wrote down new lessons", "good"); confetti(60); }
     if (snap.ideas > prev.ideas) toast("💡 New money-making idea to review");
-    if (snap.cycle && snap.cycle !== prev.cycle) toast("✨ A new cycle just finished");
+    if (snap.cycle && snap.cycle !== prev.cycle && !wasRunning) toast("✨ A scheduled cycle just finished");
   }
   prev = snap;
 }
@@ -806,12 +811,26 @@ async function load() {
   try { const r = await fetch("/api/state", { cache: "no-store" }); render(await r.json()); t0r = Date.now(); }
   catch (e) { $("say").textContent = "I can't reach my dashboard server. Start it with dashboard.cmd."; drawMascot("sleepy"); }
 }
+let starting = false, wasRunning = false, fastPoll = null;
 async function act(path, btn) {
   if (path === "/api/tuning/reset" && !confirm("Undo every self-tuned value and return to defaults?")) return;
   btn.disabled = true;
-  try { await fetch(path, { method: "POST", headers: { "X-Earner": "1" } }); } finally { setTimeout(() => { btn.disabled = false; load(); }, 1200); }
+  try {
+    const r = await fetch(path, { method: "POST", headers: { "X-Earner": "1" } });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok || body.ok === false) toast("⚠️ That didn't work: " + (body.output || body.error || `HTTP ${r.status}`), "bad");
+    return r.ok && body.ok !== false;
+  } catch (e) {
+    toast("⚠️ Can't reach the dashboard server — is dashboard.cmd running?", "bad"); return false;
+  } finally { setTimeout(() => { btn.disabled = false; load(); }, 1200); }
 }
-$("btn-run").onclick = (e) => act("/api/run", e.currentTarget);
+$("btn-run").onclick = async (e) => {
+  starting = true; $("btn-run").textContent = "⏳ Starting…";
+  speak("On it! Running a full cycle now: scouting, trading, working and learning. Takes about 1–2 minutes.", "");
+  const ok = await act("/api/run", e.currentTarget);
+  if (ok) toast("▶ Cycle started — I'll tell you when it's done");
+  setTimeout(() => { starting = false; }, 8000);    // after that, the task's own status takes over
+};
 $("btn-pause").onclick = (e) => act("/api/" + (e.currentTarget.dataset.action || "pause"), e.currentTarget);
 $("btn-reset-tuning").onclick = (e) => act("/api/tuning/reset", e.currentTarget);
 setInterval(() => { const f = Math.min(1, (Date.now() - t0r) / PERIOD); $("ring").setAttribute("stroke-dashoffset", String(56.5 * f)); }, 500);
