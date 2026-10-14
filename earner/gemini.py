@@ -47,6 +47,30 @@ def _post(model_id, body, timeout=300):
         raise GeminiError(e.code, e.read().decode("utf-8", "replace")) from None
 
 
+GROUNDING_FREE_PER_MONTH = 5000      # Gemini 3+ shared allowance, then $14 per 1,000 grounded prompts
+GROUNDING_USD = 14.0 / 1000
+_COUNTER = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "gemini_grounding.json")
+
+
+def grounding_fee(month=None):
+    """Count this month's grounded prompts; charge only beyond the free allowance."""
+    from datetime import datetime, timezone
+    month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    try:
+        with open(_COUNTER, encoding="utf-8") as f:
+            c = json.load(f)
+    except (OSError, ValueError):
+        c = {}
+    c[month] = c.get(month, 0) + 1
+    try:
+        os.makedirs(os.path.dirname(_COUNTER), exist_ok=True)
+        with open(_COUNTER, "w", encoding="utf-8") as f:
+            json.dump(c, f)
+    except OSError:
+        pass
+    return GROUNDING_USD if c[month] > GROUNDING_FREE_PER_MONTH else 0.0
+
+
 def _strip_json(text):
     """Text -> JSON, tolerating ```json fences or prose around a single object."""
     t = text.strip()
@@ -104,6 +128,9 @@ def generate(system, prompt, schema=None, web=False, max_tokens=16000, effort="m
     tout = u.get("candidatesTokenCount", 0) + u.get("thoughtsTokenCount", 0)
     pin, pout = PRICES.get(m, PRICES[DEFAULT_MODEL])
     usd = 0.0 if free_tier() else tin * pin + tout * pout
+    grounded = web and "tools" in b and bool((cand.get("groundingMetadata") or {}).get("webSearchQueries"))
+    if grounded and not free_tier():
+        usd += grounding_fee()
     parsed = _strip_json(text) if (schema and text) else None
     return {"text": text, "parsed": parsed, "model": m, "input_tokens": tin, "output_tokens": tout,
             "usd": usd, "finish": finish, "blocked": (resp.get("promptFeedback") or {}).get("blockReason")}

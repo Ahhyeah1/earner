@@ -84,6 +84,9 @@ def state():
         return {
             "status": status,
             "treasury": {"income": round(income, 2), "expenses": round(expenses, 4),
+                         "by_provider": {
+                             "gemini": round(store.db.execute("SELECT COALESCE(SUM(usd),0) FROM expenses WHERE note LIKE '%gemini%'").fetchone()[0], 6),
+                             "claude": round(store.db.execute("SELECT COALESCE(SUM(usd),0) FROM expenses WHERE note NOT LIKE '%gemini%'").fetchone()[0], 6)},
                          "profit": round(profit, 2), "series": series,
                          "ledger": _rows(store.db.execute("SELECT ts, usd, token, note FROM ledger ORDER BY id DESC LIMIT 50")),
                          "expenses_recent": _rows(store.db.execute(

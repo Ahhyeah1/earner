@@ -114,6 +114,15 @@ class GeminiClient(unittest.TestCase):
         self.assertEqual(r["usd"], 0.0)                         # free tier
         self.assertEqual(len(calls), 2)
 
+    def test_search_grounding_free_then_charged(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d, \
+                mock.patch.object(gemini, "_COUNTER", os.path.join(d, "g.json")), \
+                mock.patch.object(gemini, "GROUNDING_FREE_PER_MONTH", 2):
+            fees = [gemini.grounding_fee("2026-10") for _ in range(3)]
+            self.assertEqual(fees, [0.0, 0.0, gemini.GROUNDING_USD])
+            self.assertEqual(gemini.grounding_fee("2026-11"), 0.0)        # allowance resets monthly
+
     def test_paid_tier_is_charged(self):
         ok = {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": '{"ok": true}'}]}}],
               "usageMetadata": {"promptTokenCount": 1_000_000, "candidatesTokenCount": 0}}

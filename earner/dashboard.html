@@ -248,7 +248,7 @@ pre.log { margin: 0; max-height: 480px; overflow: auto; font: 12px/1.55 ui-monos
     <div class="grid tiles section">
       <div class="card tile big" data-go="earn"><div class="label">Profit</div><div class="value" id="k-profit">—</div><div class="note">Income minus all costs</div></div>
       <div class="card tile" data-go="earn"><div class="label">Income</div><div class="value" id="k-income">—</div><div class="note" id="k-income-n"></div></div>
-      <div class="card tile" data-go="earn"><div class="label">Costs</div><div class="value" id="k-exp">—</div><div class="note">Claude API usage</div></div>
+      <div class="card tile" data-go="earn"><div class="label">AI costs</div><div class="value" id="k-exp">—</div><div class="note" id="k-exp-n">Claude + Gemini</div></div>
       <div class="card tile" data-go="trade"><div class="label">Meme paper</div><div class="value" id="k-meme">—</div><div class="note" id="k-meme-n"></div></div>
       <div class="card tile" data-go="memory"><div class="label">Lessons learned</div><div class="value" id="k-lessons">—</div><div class="note" id="k-lessons-n"></div></div>
     </div>
@@ -333,6 +333,8 @@ pre.log { margin: 0; max-height: 480px; overflow: auto; font: 12px/1.55 ui-monos
 const $ = (id) => document.getElementById(id);
 const usd = (v, d) => { v = v || 0; const dd = d ?? (Math.abs(v) < 10 ? 2 : 0);
   return (v < 0 ? "−$" : "$") + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: dd, maximumFractionDigits: dd }); };
+// Tiny amounts (Gemini calls cost fractions of a cent) get enough decimals to be visible.
+const usdFine = (v) => usd(v, Math.abs(v) > 0 && Math.abs(v) < 0.01 ? 4 : 2);
 // Stored times are UTC; show Stockholm time (summer/winter aware).
 const STHLM = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 const when = (ts) => { if (!ts) return ""; const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z"; const d = new Date(iso);
@@ -526,6 +528,8 @@ function renderHome(S, st, T, MS, lessons) {
   const p = $("k-profit"); countUp(p, T.profit, (v) => usd(v, 2)); p.className = "value " + (T.profit > 0 ? "pos" : T.profit < 0 ? "neg" : "");
   countUp($("k-income"), T.income, (v) => usd(v, 2)); $("k-income-n").textContent = T.ledger.length ? `${T.ledger.length} payout(s)` : "No payouts yet";
   countUp($("k-exp"), T.expenses, (v) => usd(v, 2));
+  const bp = T.by_provider || {};
+  $("k-exp-n").textContent = `Claude ${usdFine(bp.claude || 0)} · Gemini ${usdFine(bp.gemini || 0)}`;
   const mm = $("k-meme");
   if (MS.equity != null) countUp(mm, MS.return_pct, (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`); else mm.textContent = "—";
   mm.className = "value " + ((MS.return_pct || 0) > 0 ? "pos" : (MS.return_pct || 0) < 0 ? "neg" : "");
@@ -564,9 +568,11 @@ function renderEarn(S, T) {
     (o) => [el("td", { class: "num", text: o.score }), el("td", {}, el("a", { href: o.url, target: "_blank", rel: "noopener", text: o.title, onclick: (e) => e.stopPropagation() })),
       el("td", { class: "why" }, el("div", { class: "clip", text: o.reasons.join(" · ") }))],
     (o) => o.reasons.join("\n"), 3);
-  const rows = F.money === "income" ? T.ledger.map((r) => [r.ts, r.note || r.token, r.usd]) : T.expenses_recent.map((r) => [r.ts, r.note || r.category, -r.usd]);
-  $("t-money").replaceChildren(...(rows.length ? rows.map(([ts, w, v]) => el("tr", {}, el("td", { class: "when", text: when(ts) }),
-    el("td", { class: "why" }, el("div", { class: "clip", text: w })), el("td", { class: "num " + (v > 0 ? "pos" : ""), text: usd(v, 2) })))
+  const rows = F.money === "income" ? T.ledger.map((r) => [r.ts, r.note || r.token, r.usd, null])
+    : T.expenses_recent.map((r) => [r.ts, r.note || r.category, -r.usd, /gemini/i.test(r.note || "") ? "Gemini" : "Claude"]);
+  $("t-money").replaceChildren(...(rows.length ? rows.map(([ts, w, v, prov]) => el("tr", {}, el("td", { class: "when", text: when(ts) }),
+    el("td", { class: "why" }, prov ? el("span", { class: "chip", style: "margin-right:6px", text: prov }) : null, el("span", { text: w })),
+    el("td", { class: "num " + (v > 0 ? "pos" : ""), text: usdFine(v) })))
     : [el("tr", {}, el("td", { colspan: 3, class: "muted", text: F.money === "income" ? "No payouts detected yet." : "No costs yet." }))]));
 }
 
