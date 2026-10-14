@@ -18,6 +18,7 @@ import { createPaywall } from "@x402/paywall";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { assessMint, isMint, KNOWN, NotAMint } from "./risk";
 import { intake, landing } from "./grants";
+import { handleUpdate } from "./telegram";
 import { svmPaywall } from "@x402/paywall/svm";
 
 export type Bindings = {
@@ -31,6 +32,9 @@ export type Bindings = {
   PAYAI_API_KEY_SECRET?: string;
   SOLANA_RPC?: string;               // optional secret: an RPC with a holder index (e.g. Helius) enables concentration checks
   RISK_PRICE_USD?: string;           // default "0.002"
+  TG_BOT_TOKEN?: string;             // secret: Telegram bot token from @BotFather
+  TG_SECRET?: string;                // secret: verifies that webhook calls really come from Telegram
+  NTFY_TOPIC?: string;               // secret: owner's ntfy topic for sale notifications
 };
 
 export type Opportunity = {
@@ -80,6 +84,16 @@ app.get("/", (c) =>
              "agent_allowed", "track", "score", "reasons"],
     note: "Scores are the agent's own estimate of expected payout per competitor. Not advice; check each listing's rules.",
   }));
+
+// Telegram rug-check bot webhook (Telegram -> us). Answer fast, work in the background.
+app.post("/tg/hook", async (c) => {
+  if (!c.env.TG_BOT_TOKEN || !c.env.TG_SECRET || c.req.header("X-Telegram-Bot-Api-Secret-Token") !== c.env.TG_SECRET) {
+    return c.text("forbidden", 403);
+  }
+  const update = await c.req.json().catch(() => null);
+  if (update) c.executionCtx.waitUntil(handleUpdate(update, c.env).catch(() => {}));
+  return c.text("ok");
+});
 
 // Grant-application service (landing page + intake form)
 app.get("/grants", (c) => c.html(landing()));
