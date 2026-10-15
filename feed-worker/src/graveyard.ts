@@ -1,5 +1,5 @@
 // Rug Graveyard: find a wallet's EMPTY token accounts (dead/rugged/sold tokens) and build ONE transaction the
-// owner signs that closes them, returning the rent deposit (~0.002 SOL each) to the owner, minus a fee (10% of the first 10 SOL, 3% above).
+// owner signs that closes them, returning the rent deposit (~0.002 SOL each) to the owner, minus a 10% fee.
 //
 // Safety by construction: the transaction contains ONLY
 //   - token-program CloseAccount instructions for accounts whose balance is exactly 0, destination = the owner,
@@ -153,10 +153,9 @@ export async function scan(owner: string, url: string): Promise<Scan> {
   return out;
 }
 
-// Tiered fee per transaction: 10% of the first 10 SOL reclaimed, 3% of anything above.
-export const TIER_LAMPORTS = 10_000_000_000, LOW_BPS = 1000, HIGH_BPS = 300;
-export const fee = (lamports: number) => Math.floor((Math.min(lamports, TIER_LAMPORTS) * LOW_BPS
-  + Math.max(0, lamports - TIER_LAMPORTS) * HIGH_BPS) / 10_000);
+// Flat 10% of what is reclaimed, no cap (owner's choice, 2026-10-16).
+export const FEE_BPS = 1000;
+export const fee = (lamports: number) => Math.floor((lamports * FEE_BPS) / 10_000);
 export const sol = (lamports: number, dp = 4) => (lamports / 1e9).toFixed(dp);
 
 // ---------------------------------------------------------------- transaction
@@ -262,7 +261,7 @@ export function actionMeta(base: string) {
     type: "action", icon: `${base}/graveyard/icon.svg`, title: "Lost & Found: reclaim your forgotten SOL",
     description: "Wallets forget SOL: empty token accounts from dead tokens (~0.002 SOL each), leftover program-deploy buffers "
       + "(often 1-10 SOL) and unclaimed pump.fun creator fees. Connect, and get it all back to your own wallet in one transaction. "
-      + "Nothing is burned and no tokens move. Fee: 10% of the first 10 SOL, 3% above.",
+      + "Nothing is burned and no tokens move. Fee: 10% of what you reclaim.",
     label: "Reclaim my SOL",
     links: { actions: [{ type: "transaction", label: "Reclaim my SOL", href: `${base}/graveyard/action` }] },
   };
@@ -294,7 +293,7 @@ export function report(s: Scan, actionLink: string): { text: string; button?: { 
   const lines = (["swap", "creator", "buffer", "token"] as Kind[]).filter((k) => s.byKind[k][0]).map((k) => KIND_LINE[k](...s.byKind[k]));
   return {
     text: [`🔍 <b>Lost &amp; Found</b> · <code>${s.owner}</code>`, "", ...lines, "",
-      `💰 Total: <b>${sol(total)} SOL</b> · you get back <b>${sol(back)} SOL</b> (fee: 10% of the first 10 SOL, 3% above).`,
+      `💰 Total: <b>${sol(total)} SOL</b> · you get back <b>${sol(back)} SOL</b> (10% fee).`,
       !s.signable ? "⚠️ This address is a program or multisig account, not a normal wallet: reclaim it from the multisig app (e.g. Squads) instead."
         : canPayFee(s) ? null : `⚠️ This wallet holds almost no SOL. Send it about ${sol(s.rentMin + 2 * NETWORK_FEE - s.ownerLamports + 100_000, 4)} SOL first so it can pay the network fee.`,
       batches > 1 ? `Biggest items first, up to ${MAX_PER_TX} per tap; tap again for the rest (${batches} rounds).` : null,

@@ -243,7 +243,7 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   if (cmd === "/lostfound" || cmd === "/graveyard" || cmd === "/reclaim") {
     const owner = findMint(text);
     if (!owner) return void (await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", text:
-      "🔍 <b>Lost &amp; Found</b>\nWallets forget SOL: every dead token leaves ~0.002 SOL locked, failed program deploys leave buffers worth SOL, and pump.fun creators often never claim their fees. Send <code>/lostfound &lt;your wallet address&gt;</code> and I'll show what's yours. Free to check; fee only on what you reclaim: 10% of the first 10 SOL, 3% above." }));
+      "🔍 <b>Lost &amp; Found</b>\nWallets forget SOL: every dead token leaves ~0.002 SOL locked, failed program deploys leave buffers worth SOL, and pump.fun creators often never claim their fees. Send <code>/lostfound &lt;your wallet address&gt;</code> and I'll show what's yours. Free to check; 10% fee only on what you reclaim." }));
     await tg(env, "sendChatAction", { chat_id: chat, action: "typing" });
     try {
       const r = G.report(await G.scan(owner, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com"), G.dialLink("https://earner-feed.earner-feed.workers.dev"));

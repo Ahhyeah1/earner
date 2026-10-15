@@ -270,7 +270,7 @@ test("report: per-kind lines, per-tx capped fee, low-balance warning", () => {
   assert.match(r.button.text, /0\.046 SOL/);
   const big = G.report(scanOf([VAULT, BUF]), "x");
   assert.match(big.text, /creator fees: <b>12\.0000 SOL/); assert.match(big.text, /1 leftover program-deploy buffer/);
-  assert.match(big.button.text, /13\.850 SOL/, "15 SOL: 10% of 10 + 3% of 5 = 1.15 fee");
+  assert.match(big.button.text, /13\.500 SOL/, "15 SOL minus flat 10%");
   assert.doesNotMatch(big.text, /almost no SOL/);
   assert.match(G.report(scanOf([BUF], { ownerLamports: 0 }), "x").text, /almost no SOL/);
   assert.equal(G.report(scanOf([]), "x").button, undefined);
@@ -286,14 +286,14 @@ test("build: buffer close and creator-fee claim instructions are exact", () => {
   assert.deepEqual(claim.data, [20, 22, 86, 123, 198, 28, 219, 132]);
   const close = p.ixs.find((x) => x.prog === G.LOADER);
   assert.deepEqual(close.acc, [BUF.address, OWNER, OWNER]); assert.deepEqual(close.data, [5, 0, 0, 0]);
-  assert.equal(b.fee, 1_150_000_000);
+  assert.equal(b.fee, 1_500_000_000);
   assert.equal(p.ixs.length, 3, "claim, close, fee - nothing else");
   assert.throws(() => G.build(OWNER, [VAULT], FEEW, HASH, 5_000_000), /event authority/);
 });
 
-test("tiered fee: 10% up to 10 SOL, 3% above", () => {
+test("flat 10% fee, no cap", () => {
   assert.equal(G.fee(2_039_280), 203_928);
   assert.equal(G.fee(10e9), 1e9);
-  assert.equal(G.fee(166e9), 1e9 + 0.03 * 156e9);       // 5.68 SOL on a 166 SOL claim
+  assert.equal(G.fee(166e9), 16.6e9);
   assert.equal(G.fee(0), 0);
 });
