@@ -4,3 +4,5 @@ export * as W from "../src/watch";
 export * as E from "../src/events";
 export * as M from "../src/mcp";
 export * as G from "../src/graveyard";
+export * as PF from "../src/pumpfees";
+export * as R from "../src/royalty";

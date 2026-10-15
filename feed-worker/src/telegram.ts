@@ -241,12 +241,14 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
       text: `Free today: ${Math.max(0, FREE_PER_DAY - used)}/${FREE_PER_DAY} · paid checks: ${credits} · watch credits: ${wcredits}` }));
   }
   if (cmd === "/lostfound" || cmd === "/graveyard" || cmd === "/reclaim") {
-    const owner = findMint(text);
+    const addrs = [...new Set((text.match(MINT_IN_TEXT) || []).filter(isMint))];
+    const owner = addrs[0] || null, coins = addrs.slice(1, 1 + G.MAX_COINS);       // extra addresses = the creator's coins
     if (!owner) return void (await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", text:
-      "🔍 <b>Lost &amp; Found</b>\nWallets forget SOL: every dead token leaves ~0.002 SOL locked, failed program deploys leave buffers worth SOL, and pump.fun creators often never claim their fees. Send <code>/lostfound &lt;your wallet address&gt;</code> and I'll show what's yours. Free to check; fee only on what you reclaim: 10% of the first 10 SOL, 3% above." }));
+      "🔍 <b>Lost &amp; Found</b>\nWallets forget SOL: every dead token leaves ~0.002 SOL locked, failed program deploys leave buffers worth SOL, and pump.fun creators often never claim their fees. Send <code>/lostfound &lt;your wallet address&gt;</code> and I'll show what's yours. Created pump.fun coins? Add them after your wallet (up to 4) to also sweep the fees still sitting in each coin. Free to check; fee only on what you reclaim: 10% of the first 10 SOL, 3% above." }));
     await tg(env, "sendChatAction", { chat_id: chat, action: "typing" });
     try {
-      const r = G.report(await G.scan(owner, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com"), G.dialLink("https://earner-feed.earner-feed.workers.dev"));
+      const r = G.report(await G.scan(owner, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", await G.coinRefs(coins)),
+        G.dialLink("https://earner-feed.earner-feed.workers.dev", coins));
       return void (await tg(env, "sendMessage", { chat_id: chat, text: r.text, parse_mode: "HTML", reply_to_message_id: m.message_id,
         link_preview_options: { is_disabled: true }, ...(r.button ? { reply_markup: { inline_keyboard: [[r.button]] } } : {}) }));
     } catch {

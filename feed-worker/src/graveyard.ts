@@ -7,6 +7,7 @@
 // No burns, no approvals, no token transfers. (Lost & Found adds closing leftover program buffers and claiming
 // pump.fun creator fees: same rule, every lamport goes to the owner except the capped fee.) The owner's wallet simulates it before signing.
 import { address, getAddressEncoder, getProgramDerivedAddress } from "@solana/addresses";
+import * as PF from "./pumpfees";
 
 // Serialized by hand (legacy message) so we add no Solana SDK to the worker bundle.
 
@@ -58,7 +59,8 @@ export const isAddress = (s: unknown): s is string => { try { return typeof s ==
 //             claimed into the owner's WSOL account, which is then closed to unwrap it to plain SOL)
 export type Kind = "token" | "buffer" | "creator" | "swap";
 export type Closable = { kind: Kind; address: string; program: string; mint?: string; lamports: number;
-                         authority?: string; dest?: string };        // swap: vault authority PDA, owner's WSOL ATA
+                         authority?: string; dest?: string;          // swap: vault authority PDA, owner's WSOL ATA
+                         sweeps?: Ix[] };                            // creator/swap: sweep fees still on the curve/pool first
 export type Scan = { owner: string; closable: Closable[]; withBalance: number; skipped: number; lamports: number; byKind: Record<Kind, [number, number]>;
                      ownerLamports: number; rentMin: number; signable: boolean };
 
@@ -116,7 +118,12 @@ export async function programCtx(): Promise<Required<Ctx>> {
 }
 export const pumpEventAuthority = async () => (await programCtx()).pumpEv;
 
-export async function scan(owner: string, url: string): Promise<Scan> {
+export type CoinRef = { mint: string; pool?: string };
+export const MAX_COINS = 4;           // each coin adds ~8 accounts to the transaction; keep it under the size limit
+
+/** coins: pump.fun coins the owner created. Their unswept creator fees (still on the bonding curve / PumpSwap pool)
+ *  are swept into the owner's vaults inside the same transaction, then claimed with everything else. */
+export async function scan(owner: string, url: string, coins: CoinRef[] = []): Promise<Scan> {
   const [ownerAcct, rentMin] = await Promise.all([
     rpc(url, "getAccountInfo", [owner, { encoding: "base64", dataSlice: { offset: 0, length: 0 }, commitment: "confirmed" }]).then((r) => r.value),
     rpc(url, "getMinimumBalanceForRentExemption", [0]).then(Number).catch(() => RENT_EXEMPT_MIN)]);
@@ -135,17 +142,34 @@ export async function scan(owner: string, url: string): Promise<Scan> {
       filters: [{ memcmp: { offset: 0, bytes: "2UzHM" } }, { memcmp: { offset: 4, bytes: "2" } }, { memcmp: { offset: 5, bytes: owner } }] }]);
     for (const b of bufs || []) out.closable.push({ kind: "buffer", address: b.pubkey, program: LOADER, lamports: Number(b.account.lamports) });
   } catch { /* skip buffers */ }
+  const curveSweeps: Ix[] = [], poolSweeps: Ix[] = []; let curveUnswept = 0, poolUnswept = 0;
+  for (const c of coins.slice(0, MAX_COINS)) {
+    try {
+      const ai = await rpc(url, "getAccountInfo", [await PF.bondingCurve(c.mint), { encoding: "base64", commitment: "confirmed" }]);
+      const curve = ai?.value && PF.decodeCurve(PF.fromB64(ai.value.data[0]));
+      if (curve && curve.creator === owner && curve.creatorFee > 0 && curve.quoteMint === WSOL) {
+        curveSweeps.push(await PF.sweepCurveIx(owner, c.mint, owner)); curveUnswept += curve.creatorFee;
+      }
+      if (c.pool) {
+        const pa = await rpc(url, "getAccountInfo", [c.pool, { encoding: "base64", commitment: "confirmed" }]);
+        const pool = pa?.value && PF.decodePool(PF.fromB64(pa.value.data[0]));
+        if (pool && pool.coinCreator === owner && pool.creatorFees > 0 && pool.quoteMint === WSOL) {
+          poolSweeps.push(await PF.sweepPoolIx(owner, c.pool, pool)); poolUnswept += pool.creatorFees;
+        }
+      }
+    } catch { /* skip this coin */ }
+  }
   try {
     const vault = await creatorVault(owner);
     const bal = (await rpc(url, "getBalance", [vault, { commitment: "confirmed" }])).value;
-    const claimable = bal - rentMin;                         // the program leaves the vault its live rent-exempt minimum
-    if (claimable > 10_000) out.closable.push({ kind: "creator", address: vault, program: PUMP, lamports: claimable });
+    const claimable = bal + curveUnswept - rentMin;          // the program leaves the vault its live rent-exempt minimum
+    if (claimable > 10_000) out.closable.push({ kind: "creator", address: vault, program: PUMP, lamports: claimable, sweeps: curveSweeps });
   } catch { /* skip creator fees */ }
   try {             // PumpSwap (graduated tokens): WSOL sits in the ATA of the vault authority PDA ["creator_vault", owner]
     const authority = await pda(PSWAP, [enc.encode("creator_vault"), owner]);
     const vaultAta = await ata(authority, WSOL);
-    const amt = Number((await rpc(url, "getTokenAccountBalance", [vaultAta, { commitment: "confirmed" }]))?.value?.amount || 0);
-    if (amt > 10_000) out.closable.push({ kind: "swap", address: vaultAta, program: PSWAP, lamports: amt, authority, dest: await ata(owner, WSOL) });
+    const amt = Number((await rpc(url, "getTokenAccountBalance", [vaultAta, { commitment: "confirmed" }]).catch(() => null))?.value?.amount || 0) + poolUnswept;
+    if (amt > 10_000) out.closable.push({ kind: "swap", address: vaultAta, program: PSWAP, lamports: amt, authority, dest: await ata(owner, WSOL), sweeps: poolSweeps });
   } catch { /* no PumpSwap vault */ }
   out.closable.sort((a, b) => b.lamports - a.lamports);
   for (const c of out.closable) { out.byKind[c.kind][0]++; out.byKind[c.kind][1] += c.lamports; }
@@ -180,13 +204,14 @@ export function reclaimIxs(owner: string, c: Closable, ctx: Ctx = {}): Ix[] {
   if (c.kind === "buffer") return [{ program: LOADER, keys: [{ addr: c.address, writable: true }, me, me], data: [5, 0, 0, 0] }];  // Close (buffer: no program account)
   if (c.kind === "creator") {
     if (!ctx.pumpEv) throw new Error("event authority needed");
-    return [{ program: PUMP, data: COLLECT_CREATOR_FEE, keys: [me, { addr: c.address, writable: true }, { addr: SYSTEM },
+    return [...(c.sweeps || []), { program: PUMP, data: COLLECT_CREATOR_FEE, keys: [me, { addr: c.address, writable: true }, { addr: SYSTEM },
       { addr: ctx.pumpEv }, { addr: PUMP }] }];                                                                             // collect_creator_fee
   }
   if (!ctx.swapEv || !c.authority || !c.dest) throw new Error("swap context needed");
   const wsolAta = { addr: c.dest, writable: true };
   return [
     { program: ATA_PROGRAM, data: [1], keys: [me, wsolAta, { addr: owner }, { addr: WSOL }, { addr: SYSTEM }, { addr: TOKEN }] },  // CreateIdempotent
+    ...(c.sweeps || []),                                                                                                    // pool -> vault
     { program: PSWAP, data: COLLECT_COIN_CREATOR_FEE, keys: [{ addr: WSOL }, { addr: TOKEN }, me, { addr: c.authority },
       { addr: c.address, writable: true }, wsolAta, { addr: ctx.swapEv }, { addr: PSWAP }] },                               // collect_coin_creator_fee
     { program: TOKEN, data: [9], keys: [wsolAta, me, me] },                                                                 // unwrap: close WSOL account
@@ -255,7 +280,18 @@ const ACTION_HEADERS = {
 export const actionJson = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: ACTION_HEADERS });
 export const actionOptions = () => new Response(null, { headers: ACTION_HEADERS });
 
-export const dialLink = (base: string) => `https://dial.to/?action=${encodeURIComponent(`solana-action:${base}/graveyard/action`)}`;
+export const dialLink = (base: string, coins: string[] = []) =>
+  `https://dial.to/?action=${encodeURIComponent(`solana-action:${base}/graveyard/action${coins.length ? `?coins=${coins.join(",")}` : ""}`)}`;
+
+/** pump.fun coins named by the user -> {mint, PumpSwap pool if graduated} (pool found via DexScreener pairs). */
+export async function coinRefs(mints: string[]): Promise<CoinRef[]> {
+  return Promise.all(mints.filter(isAddress).slice(0, MAX_COINS).map(async (mint) => {
+    try {
+      const pairs: any = await (await fetch(`https://api.dexscreener.com/token-pairs/v1/solana/${mint}`)).json();
+      return { mint, pool: Array.isArray(pairs) ? pairs.find((p: any) => p.dexId === "pumpswap")?.pairAddress : undefined };
+    } catch { return { mint }; }
+  }));
+}
 
 export function actionMeta(base: string) {
   return {

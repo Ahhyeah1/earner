@@ -297,3 +297,42 @@ test("tiered fee: 10% up to 10 SOL, 3% above", () => {
   assert.equal(G.fee(166e9), 1e9 + 0.03 * 156e9);       // 5.68 SOL on a 166 SOL claim
   assert.equal(G.fee(0), 0);
 });
+
+// ---- pump.fun fee plumbing + Royalty Hunter ----
+const PF = T.PF, R = T.R;
+function curveBytes({ creator = 7, complete = 0, quoteZero = true, fee = 0 } = {}) {
+  const d = new Uint8Array(151); d.set([23, 183, 248, 55, 96, 216, 172, 96]); d[48] = complete; d.fill(creator, 49, 81);
+  if (!quoteZero) d.fill(9, 83, 115);
+  new DataView(d.buffer).setBigUint64(125, BigInt(fee), true);
+  return d;
+}
+test("decodeCurve: zero quote mint means SOL-paired; unswept fee read from the new field", () => {
+  const c = PF.decodeCurve(curveBytes({ fee: 123456 }));
+  assert.equal(c.quoteMint, PF.WSOL); assert.equal(c.creatorFee, 123456); assert.equal(c.complete, false);
+  assert.notEqual(PF.decodeCurve(curveBytes({ quoteZero: false })).quoteMint, PF.WSOL);
+  assert.equal(PF.decodeCurve(new Uint8Array(151)), null, "wrong discriminator");
+  const old = curveBytes().slice(0, 81); assert.equal(PF.decodeCurve(old).creatorFee, 0, "pre-upgrade account");
+});
+
+const base = { mint: "m", symbol: "X", name: "", creator: "c", graduated: true, shared: false, holderReward: false, creatorFeeBps: 0,
+  vaultLamports: 2e8, unsweptLamports: 0, devLamports: 0, devHolds: false, lastActivityDays: 30, lastSignedDays: 40, recentChecked: 3,
+  volume24h: 50_000, liquidityUsd: 20_000, weeklyFeeLamports: 3e8, socials: [], ageDays: 60, analyzedAt: "2026-10-16T00:00:00Z" };
+test("judge: only old, sold-out, silent creators with live trading and real fees count as abandoned", () => {
+  assert.equal(R.judge(base).verdict, "abandoned");
+  assert.equal(R.judge({ ...base, ageDays: 1 }).verdict, "active", "fresh coin with a burner wallet");
+  assert.equal(R.judge({ ...base, lastSignedDays: 2 }).verdict, "active", "creator signed recently");
+  assert.equal(R.judge({ ...base, lastSignedDays: null, lastActivityDays: 0 }).verdict, "active", "unknown signer, wallet active today");
+  assert.equal(R.judge({ ...base, devHolds: true }).verdict, "active");
+  assert.equal(R.judge({ ...base, volume24h: 100, liquidityUsd: 100 }).verdict, "active", "dead coin");
+  assert.equal(R.judge({ ...base, vaultLamports: 0, weeklyFeeLamports: 1e7 }).verdict, "active", "too little money");
+  assert.equal(R.judge({ ...base, shared: true }).verdict, "shared");
+  assert.equal(R.judge({ ...base, holderReward: true }).verdict, "skip");
+});
+test("evidence pack: facts, creator wallet, fill-in fields; page escapes names", () => {
+  const r = { ...base, ...R.judge(base), symbol: "<b>X", socials: [{ type: "twitter", url: "https://x.com/x" }] };
+  const ev = R.evidence(r);
+  assert.match(ev, /Creator wallet: c/); assert.match(ev, /<fill in>/); assert.match(ev, /https:\/\/x\.com\/x/);
+  const page = R.evidencePage(r);
+  assert.doesNotMatch(page, /<b>X/); assert.match(page, /&lt;b&gt;X/);
+  assert.match(R.boardPage([r]), /\/royalties\/m/);
+});
