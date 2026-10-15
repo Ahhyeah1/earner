@@ -21,14 +21,14 @@ button:disabled{opacity:.6;cursor:wait}.row{display:flex;justify-content:space-b
 <div id="out" style="margin-top:16px" aria-live="polite"></div></div>
 <div class="card"><h2>What it finds</h2><ul>
 <li><b>Program deploy buffers</b>: a failed or interrupted <code>solana program deploy</code> leaves a buffer account holding the program's rent, often 1-10 SOL.</li>
-<li><b>Unclaimed pump.fun creator fees</b>: trading fees that pile up in the creator's vault until claimed.</li>
+<li><b>Unclaimed pump.fun creator fees</b>: trading fees that pile up in the creator's vaults (bonding curve and PumpSwap) until claimed.</li>
 <li><b>Empty token accounts</b>: every token you sold or that rugged leaves ~0.002 SOL behind.</li></ul>
 <p class="mut">Everything goes back to the connected wallet. Nothing is burned and no tokens move; your wallet shows the exact result before you sign. Fee: 10% of what you reclaim, max 1 SOL per transaction. Prefer the CLI? <code>solana program close --buffers</code> does buffers for free.</p></div>
 <p class="mut">Also: <a href="https://t.me/Rug1CheckSolBot">@Rug1CheckSolBot</a> (rug checks) · <a href="/rugs">rug radar</a> · <a href="https://github.com/Ahhyeah1/earner">open source</a></p>
 </main><script>
 const f=document.getElementById("f"),w=document.getElementById("w"),out=document.getElementById("out"),go=document.getElementById("go");
 const sol=(l,d=4)=>(l/1e9).toFixed(d), esc=(s)=>String(s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const label={creator:"Unclaimed pump.fun creator fees",buffer:"Program deploy buffers",token:"Empty token accounts"};
+const label={swap:"Unclaimed PumpSwap creator fees",creator:"Unclaimed pump.fun creator fees",buffer:"Program deploy buffers",token:"Empty token accounts"};
 try{const q=new URLSearchParams(location.search).get("wallet");if(q){w.value=q;setTimeout(()=>f.requestSubmit(),0);}}catch(e){}
 f.addEventListener("submit",async(e)=>{e.preventDefault();const a=w.value.trim();if(!a)return;go.disabled=true;out.textContent="Scanning…";
  try{const r=await fetch("/lostfound/scan?wallet="+encodeURIComponent(a));const j=await r.json();

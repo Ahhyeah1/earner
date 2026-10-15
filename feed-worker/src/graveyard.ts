@@ -53,15 +53,22 @@ export const isAddress = (s: unknown): s is string => { try { return typeof s ==
 // Three kinds of forgotten SOL a wallet can reclaim by itself:
 //   token   - empty token accounts (rent deposit, ~0.002 SOL each)
 //   buffer  - leftover program-deploy buffers the wallet is authority of (often 1-10 SOL each)
-//   creator - unclaimed pump.fun creator fees in the creator's vault
-export type Kind = "token" | "buffer" | "creator";
-export type Closable = { kind: Kind; address: string; program: string; mint?: string; lamports: number };
+//   creator - unclaimed pump.fun creator fees in the creator's bonding-curve vault (native SOL)
+//   swap    - unclaimed PumpSwap creator fees for graduated tokens (wrapped SOL in the creator vault's token account;
+//             claimed into the owner's WSOL account, which is then closed to unwrap it to plain SOL)
+export type Kind = "token" | "buffer" | "creator" | "swap";
+export type Closable = { kind: Kind; address: string; program: string; mint?: string; lamports: number;
+                         authority?: string; dest?: string };        // swap: vault authority PDA, owner's WSOL ATA
 export type Scan = { owner: string; closable: Closable[]; withBalance: number; skipped: number; lamports: number; byKind: Record<Kind, [number, number]>;
                      ownerLamports: number; rentMin: number; signable: boolean };
 
 export const LOADER = "BPFLoaderUpgradeab1e11111111111111111111111";
 export const PUMP = "6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P";
 const COLLECT_CREATOR_FEE = [20, 22, 86, 123, 198, 28, 219, 132];        // sha256("global:collect_creator_fee")[0..8]
+export const PSWAP = "pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA";
+export const WSOL = "So11111111111111111111111111111111111111112";
+export const ATA_PROGRAM = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+const COLLECT_COIN_CREATOR_FEE = [160, 57, 89, 42, 181, 139, 43, 66];     // sha256("global:collect_coin_creator_fee")[0..8]
 
 async function rpc(url: string, method: string, params: unknown[]) {
   let r: Response | undefined;
@@ -97,16 +104,23 @@ const enc = new TextEncoder();
 export async function creatorVault(owner: string) {
   return (await getProgramDerivedAddress({ programAddress: address(PUMP), seeds: [enc.encode("creator-vault"), getAddressEncoder().encode(address(owner))] }))[0] as string;
 }
-let eventAuth: string | undefined;
-export async function pumpEventAuthority() {
-  return eventAuth ??= (await getProgramDerivedAddress({ programAddress: address(PUMP), seeds: [enc.encode("__event_authority")] }))[0] as string;
+const pda = async (program: string, seeds: (string | Uint8Array)[]) => (await getProgramDerivedAddress({ programAddress: address(program),
+  seeds: seeds.map((s) => typeof s === "string" ? getAddressEncoder().encode(address(s)) : s) }))[0] as string;
+export const ata = (owner: string, mint: string, tokenProgram = TOKEN) => pda(ATA_PROGRAM, [owner, tokenProgram, mint]);
+
+export type Ctx = { pumpEv?: string; swapEv?: string };
+let ctxCache: Required<Ctx> | undefined;
+/** Event-authority PDAs of the pump and PumpSwap programs (constant; computed once). */
+export async function programCtx(): Promise<Required<Ctx>> {
+  return ctxCache ??= { pumpEv: await pda(PUMP, [enc.encode("__event_authority")]), swapEv: await pda(PSWAP, [enc.encode("__event_authority")]) };
 }
+export const pumpEventAuthority = async () => (await programCtx()).pumpEv;
 
 export async function scan(owner: string, url: string): Promise<Scan> {
   const [ownerAcct, rentMin] = await Promise.all([
     rpc(url, "getAccountInfo", [owner, { encoding: "base64", dataSlice: { offset: 0, length: 0 }, commitment: "confirmed" }]).then((r) => r.value),
     rpc(url, "getMinimumBalanceForRentExemption", [0]).then(Number).catch(() => RENT_EXEMPT_MIN)]);
-  const out: Scan = { owner, closable: [], withBalance: 0, skipped: 0, lamports: 0, byKind: { token: [0, 0], buffer: [0, 0], creator: [0, 0] },
+  const out: Scan = { owner, closable: [], withBalance: 0, skipped: 0, lamports: 0, byKind: { token: [0, 0], buffer: [0, 0], creator: [0, 0], swap: [0, 0] },
     ownerLamports: Number(ownerAcct?.lamports || 0), rentMin,
     // Only a plain system account (a normal wallet) can pay network fees; multisig vaults / program accounts can't.
     signable: !ownerAcct || ownerAcct.owner === SYSTEM };
@@ -127,6 +141,12 @@ export async function scan(owner: string, url: string): Promise<Scan> {
     const claimable = bal - rentMin;                         // the program leaves the vault its live rent-exempt minimum
     if (claimable > 10_000) out.closable.push({ kind: "creator", address: vault, program: PUMP, lamports: claimable });
   } catch { /* skip creator fees */ }
+  try {             // PumpSwap (graduated tokens): WSOL sits in the ATA of the vault authority PDA ["creator_vault", owner]
+    const authority = await pda(PSWAP, [enc.encode("creator_vault"), owner]);
+    const vaultAta = await ata(authority, WSOL);
+    const amt = Number((await rpc(url, "getTokenAccountBalance", [vaultAta, { commitment: "confirmed" }]))?.value?.amount || 0);
+    if (amt > 10_000) out.closable.push({ kind: "swap", address: vaultAta, program: PSWAP, lamports: amt, authority, dest: await ata(owner, WSOL) });
+  } catch { /* no PumpSwap vault */ }
   out.closable.sort((a, b) => b.lamports - a.lamports);
   for (const c of out.closable) { out.byKind[c.kind][0]++; out.byKind[c.kind][1] += c.lamports; }
   out.lamports = out.closable.reduce((s, c) => s + c.lamports, 0);
@@ -151,14 +171,24 @@ function u64le(n: number): number[] {
 type Meta = { addr: string; signer?: boolean; writable?: boolean };
 export type Ix = { program: string; keys: Meta[]; data: number[] };
 
-/** The one instruction that reclaims an item. Destination is always the owner. */
-export function reclaimIx(owner: string, c: Closable, eventAuthority?: string): Ix {
+/** The instruction(s) that reclaim an item. Everything lands in the owner's wallet. */
+export function reclaimIxs(owner: string, c: Closable, ctx: Ctx = {}): Ix[] {
   const me = { addr: owner, signer: true, writable: true };
-  if (c.kind === "token") return { program: c.program, keys: [{ addr: c.address, writable: true }, me, me], data: [9] };          // CloseAccount
-  if (c.kind === "buffer") return { program: LOADER, keys: [{ addr: c.address, writable: true }, me, me], data: [5, 0, 0, 0] };  // Close (buffer: no program account)
-  if (!eventAuthority) throw new Error("event authority needed");
-  return { program: PUMP, data: COLLECT_CREATOR_FEE, keys: [me, { addr: c.address, writable: true }, { addr: SYSTEM },
-    { addr: eventAuthority }, { addr: PUMP }] };                                                                            // collect_creator_fee
+  if (c.kind === "token") return [{ program: c.program, keys: [{ addr: c.address, writable: true }, me, me], data: [9] }];          // CloseAccount
+  if (c.kind === "buffer") return [{ program: LOADER, keys: [{ addr: c.address, writable: true }, me, me], data: [5, 0, 0, 0] }];  // Close (buffer: no program account)
+  if (c.kind === "creator") {
+    if (!ctx.pumpEv) throw new Error("event authority needed");
+    return [{ program: PUMP, data: COLLECT_CREATOR_FEE, keys: [me, { addr: c.address, writable: true }, { addr: SYSTEM },
+      { addr: ctx.pumpEv }, { addr: PUMP }] }];                                                                             // collect_creator_fee
+  }
+  if (!ctx.swapEv || !c.authority || !c.dest) throw new Error("swap context needed");
+  const wsolAta = { addr: c.dest, writable: true };
+  return [
+    { program: ATA_PROGRAM, data: [1], keys: [me, wsolAta, { addr: owner }, { addr: WSOL }, { addr: SYSTEM }, { addr: TOKEN }] },  // CreateIdempotent
+    { program: PSWAP, data: COLLECT_COIN_CREATOR_FEE, keys: [{ addr: WSOL }, { addr: TOKEN }, me, { addr: c.authority },
+      { addr: c.address, writable: true }, wsolAta, { addr: ctx.swapEv }, { addr: PSWAP }] },                               // collect_coin_creator_fee
+    { program: TOKEN, data: [9], keys: [wsolAta, me, me] },                                                                 // unwrap: close WSOL account
+  ];
 }
 
 /** Legacy message compiler: fee payer first, then writable signers, readonly signers, writable, readonly. */
@@ -183,21 +213,21 @@ export type Built = { tx: Uint8Array; closed: Closable[]; reclaimed: number; fee
  *  feeWalletLamports: current fee-wallet balance; if the fee couldn't make an empty fee wallet rent-exempt, it is
  *  skipped (the user's reclaim must never fail because of our fee). */
 export function build(owner: string, items: Closable[], feeWallet: string, blockhash: string, feeWalletLamports: number,
-                      eventAuthority?: string, max = MAX_PER_TX): Built {
+                      ctx: Ctx = {}, max = MAX_PER_TX): Built {
   let take = items.slice(0, max);
   for (;;) {
-    const built = assemble(owner, take, feeWallet, blockhash, feeWalletLamports, eventAuthority);
+    const built = assemble(owner, take, feeWallet, blockhash, feeWalletLamports, ctx);
     if (built.tx.length <= TX_LIMIT || take.length <= 1) return built;
     take = take.slice(0, -1);
   }
 }
 
-function assemble(owner: string, closed: Closable[], feeWallet: string, blockhash: string, feeWalletLamports: number, eventAuthority?: string): Built {
+function assemble(owner: string, closed: Closable[], feeWallet: string, blockhash: string, feeWalletLamports: number, ctx: Ctx): Built {
   if (!closed.length) throw new Error("nothing to close");
   const reclaimed = closed.reduce((s, c) => s + c.lamports, 0);
   const due = fee(reclaimed);
   const f = owner === feeWallet || due === 0 || feeWalletLamports + due < RENT_EXEMPT_MIN ? 0 : due;
-  const ixs = closed.map((c) => reclaimIx(owner, c, eventAuthority));
+  const ixs = closed.flatMap((c) => reclaimIxs(owner, c, ctx));
   if (f) ixs.push({ program: SYSTEM, data: [2, 0, 0, 0, ...u64le(f)],                                                    // Transfer
     keys: [{ addr: owner, signer: true, writable: true }, { addr: feeWallet, writable: true }, { addr: REFERENCE }] });
   return { tx: compile(owner, ixs, blockhash), closed, reclaimed, fee: f };
@@ -245,6 +275,7 @@ export function totalFee(items: Closable[]): number {
 
 const KIND_LINE: Record<Kind, (n: number, l: number) => string> = {
   creator: (n, l) => `💸 Unclaimed pump.fun creator fees: <b>${sol(l)} SOL</b>`,
+  swap: (n, l) => `💸 Unclaimed PumpSwap creator fees (graduated tokens): <b>${sol(l)} SOL</b>`,
   buffer: (n, l) => `🧱 ${n} leftover program-deploy buffer(s): <b>${sol(l)} SOL</b>`,
   token: (n, l) => `🪦 ${n} empty token account(s) (dead, rugged or sold tokens): <b>${sol(l)} SOL</b>`,
 };
@@ -258,7 +289,7 @@ export function report(s: Scan, actionLink: string): { text: string; button?: { 
       + (s.withBalance ? `\n(${s.withBalance} token account(s) still hold a balance.)` : "") };
   }
   const total = s.lamports, back = total - totalFee(s.closable), batches = Math.ceil(s.closable.length / MAX_PER_TX);
-  const lines = (["creator", "buffer", "token"] as Kind[]).filter((k) => s.byKind[k][0]).map((k) => KIND_LINE[k](...s.byKind[k]));
+  const lines = (["swap", "creator", "buffer", "token"] as Kind[]).filter((k) => s.byKind[k][0]).map((k) => KIND_LINE[k](...s.byKind[k]));
   return {
     text: [`🔍 <b>Lost &amp; Found</b> · <code>${s.owner}</code>`, "", ...lines, "",
       `💰 Total: <b>${sol(total)} SOL</b> · you get back <b>${sol(back)} SOL</b> (10% fee, max 1 SOL per transaction).`,

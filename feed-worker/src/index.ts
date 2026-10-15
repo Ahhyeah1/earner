@@ -146,7 +146,7 @@ app.post("/graveyard/action", async (c) => {
     if (!s.signable) return G.actionJson({ message: "This address is a program or multisig account, not a normal wallet. Reclaim from your multisig app instead." }, 422);
     if (!G.canPayFee(s)) return G.actionJson({ message: "This wallet needs about 0.001 SOL to pay the network fee. Top it up, then try again." }, 422);
     const [hash, feeBal] = await Promise.all([G.latestBlockhash(rpc), G.balance(rpc, c.env.PAY_TO_SOLANA)]);
-    const b = G.build(body.account, s.closable, c.env.PAY_TO_SOLANA, hash, feeBal, await G.pumpEventAuthority());
+    const b = G.build(body.account, s.closable, c.env.PAY_TO_SOLANA, hash, feeBal, await G.programCtx());
     const left = s.closable.length - b.closed.length;
     return G.actionJson({ type: "transaction", transaction: G.b64(b.tx),
       message: `Reclaiming ${b.closed.length} item(s): +${G.sol(b.reclaimed - b.fee)} SOL to you, ${b.fee ? G.sol(b.fee) + " SOL fee" : "no fee this time"}.`

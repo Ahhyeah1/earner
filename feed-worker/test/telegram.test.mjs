@@ -255,7 +255,7 @@ test("build: exact instructions, fee math, size limit, fee skipped when it can't
 });
 
 const scanOf = (closable, extra = {}) => {
-  const byKind = { token: [0, 0], buffer: [0, 0], creator: [0, 0] };
+  const byKind = { token: [0, 0], buffer: [0, 0], creator: [0, 0], swap: [0, 0] };
   for (const c of closable) { byKind[c.kind][0]++; byKind[c.kind][1] += c.lamports; }
   return { owner: OWNER, closable, withBalance: 3, skipped: 0, lamports: closable.reduce((s, c) => s + c.lamports, 0), byKind,
            ownerLamports: 50_000_000, rentMin: 650_240, signable: true, ...extra };
@@ -278,7 +278,7 @@ test("report: per-kind lines, per-tx capped fee, low-balance warning", () => {
 
 test("build: buffer close and creator-fee claim instructions are exact", () => {
   const EV = G.b58encode(new Uint8Array(32).fill(203));
-  const b = G.build(OWNER, [VAULT, BUF], FEEW, HASH, 5_000_000, EV);
+  const b = G.build(OWNER, [VAULT, BUF], FEEW, HASH, 5_000_000, { pumpEv: EV });
   const p = parseTx(b.tx);
   assert.equal(p.rest, 0); assert.equal(p.nsig, 1); assert.equal(p.keys[0], OWNER); assert.equal(p.header[0], 1);
   const claim = p.ixs.find((x) => x.prog === G.PUMP);
