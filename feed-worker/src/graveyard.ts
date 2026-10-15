@@ -1,5 +1,5 @@
 // Rug Graveyard: find a wallet's EMPTY token accounts (dead/rugged/sold tokens) and build ONE transaction the
-// owner signs that closes them, returning the rent deposit (~0.002 SOL each) to the owner, minus a 10% fee.
+// owner signs that closes them, returning the rent deposit (~0.002 SOL each) to the owner, minus a fee (10% of the first 10 SOL, 3% above).
 //
 // Safety by construction: the transaction contains ONLY
 //   - token-program CloseAccount instructions for accounts whose balance is exactly 0, destination = the owner,
@@ -16,7 +16,7 @@ export const SYSTEM = "11111111111111111111111111111111";
 // Read-only marker on every fee transfer, so our books can find all Graveyard payments with
 // getSignaturesForAddress (Solana Pay "reference" trick). A random key nobody owns.
 export const REFERENCE = "G6UU9Hjv2XaQcHuDbMyfgNFGgc3aaettcRhgJrpkbCfm";
-export const FEE_BPS = 1000, MAX_PER_TX = 20, TX_LIMIT = 1232, NETWORK_FEE = 5000;
+export const MAX_PER_TX = 20, TX_LIMIT = 1232, NETWORK_FEE = 5000;
 // A system account must hold at least this much to exist; a smaller payment into an empty fee wallet fails the tx.
 // (Conservative: the live minimum has been lower since Solana's rent cut; fetched per scan where exactness matters.)
 export const RENT_EXEMPT_MIN = 890_880;
@@ -153,8 +153,10 @@ export async function scan(owner: string, url: string): Promise<Scan> {
   return out;
 }
 
-export const FEE_CAP = 1_000_000_000;                          // never more than 1 SOL fee per transaction
-export const fee = (lamports: number) => Math.min(FEE_CAP, Math.floor((lamports * FEE_BPS) / 10_000));
+// Tiered fee per transaction: 10% of the first 10 SOL reclaimed, 3% of anything above.
+export const TIER_LAMPORTS = 10_000_000_000, LOW_BPS = 1000, HIGH_BPS = 300;
+export const fee = (lamports: number) => Math.floor((Math.min(lamports, TIER_LAMPORTS) * LOW_BPS
+  + Math.max(0, lamports - TIER_LAMPORTS) * HIGH_BPS) / 10_000);
 export const sol = (lamports: number, dp = 4) => (lamports / 1e9).toFixed(dp);
 
 // ---------------------------------------------------------------- transaction
@@ -260,7 +262,7 @@ export function actionMeta(base: string) {
     type: "action", icon: `${base}/graveyard/icon.svg`, title: "Lost & Found: reclaim your forgotten SOL",
     description: "Wallets forget SOL: empty token accounts from dead tokens (~0.002 SOL each), leftover program-deploy buffers "
       + "(often 1-10 SOL) and unclaimed pump.fun creator fees. Connect, and get it all back to your own wallet in one transaction. "
-      + "Nothing is burned and no tokens move. Fee: 10% of what you reclaim, max 1 SOL per transaction.",
+      + "Nothing is burned and no tokens move. Fee: 10% of the first 10 SOL, 3% above.",
     label: "Reclaim my SOL",
     links: { actions: [{ type: "transaction", label: "Reclaim my SOL", href: `${base}/graveyard/action` }] },
   };
@@ -292,7 +294,7 @@ export function report(s: Scan, actionLink: string): { text: string; button?: { 
   const lines = (["swap", "creator", "buffer", "token"] as Kind[]).filter((k) => s.byKind[k][0]).map((k) => KIND_LINE[k](...s.byKind[k]));
   return {
     text: [`🔍 <b>Lost &amp; Found</b> · <code>${s.owner}</code>`, "", ...lines, "",
-      `💰 Total: <b>${sol(total)} SOL</b> · you get back <b>${sol(back)} SOL</b> (10% fee, max 1 SOL per transaction).`,
+      `💰 Total: <b>${sol(total)} SOL</b> · you get back <b>${sol(back)} SOL</b> (fee: 10% of the first 10 SOL, 3% above).`,
       !s.signable ? "⚠️ This address is a program or multisig account, not a normal wallet: reclaim it from the multisig app (e.g. Squads) instead."
         : canPayFee(s) ? null : `⚠️ This wallet holds almost no SOL. Send it about ${sol(s.rentMin + 2 * NETWORK_FEE - s.ownerLamports + 100_000, 4)} SOL first so it can pay the network fee.`,
       batches > 1 ? `Biggest items first, up to ${MAX_PER_TX} per tap; tap again for the rest (${batches} rounds).` : null,
