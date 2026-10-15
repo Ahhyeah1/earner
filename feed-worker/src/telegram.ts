@@ -3,6 +3,7 @@
 import { assessMint, isMint, type Assessment } from "./risk";
 import * as W from "./watch";
 import * as E from "./events";
+import * as G from "./graveyard";
 
 export type TgEnv = {
   FEED: KVNamespace; TG_BOT_TOKEN?: string; TG_SECRET?: string; SOLANA_RPC?: string; NTFY_TOPIC?: string;
@@ -121,6 +122,8 @@ Send me a token's mint address (or a pump.fun / solscan link) and I'll check it 
 👁 <b>Watchtower:</b> <code>/watch &lt;mint&gt;</code> and I'll alert you if the contract turns dangerous later (mint/freeze authority comes back, risky extensions, big holder moves). 1 free watch · /watches · /unwatch
 
 ${FREE_PER_DAY} free checks a day. /buy for more · /credits · /terms · /paysupport
+🪦 <b>Rug Graveyard:</b> <code>/graveyard &lt;wallet&gt;</code> shows how much SOL is locked in your dead token accounts, and gets it back in one tap.
+
 In groups: <code>/check &lt;mint&gt;</code> · admins can turn on <code>/guard on</code> (auto-warns on risky tokens)
 📡 Daily rug radar: earner-feed.earner-feed.workers.dev/rugs`;
 
@@ -236,6 +239,19 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     const wcredits = Number((await env.FEED.get(watchKey(uid))) || 0);
     return void (await tg(env, "sendMessage", { chat_id: chat,
       text: `Free today: ${Math.max(0, FREE_PER_DAY - used)}/${FREE_PER_DAY} · paid checks: ${credits} · watch credits: ${wcredits}` }));
+  }
+  if (cmd === "/graveyard" || cmd === "/reclaim") {
+    const owner = findMint(text);
+    if (!owner) return void (await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", text:
+      "🪦 <b>Rug Graveyard</b>\nEvery token you ever held left an empty account with ~0.002 SOL rent locked in it. Send <code>/graveyard &lt;your wallet address&gt;</code> and I'll show how much you can reclaim. Free to check; 10% fee only on what you reclaim." }));
+    await tg(env, "sendChatAction", { chat_id: chat, action: "typing" });
+    try {
+      const r = G.report(await G.scan(owner, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com"), G.dialLink("https://earner-feed.earner-feed.workers.dev"));
+      return void (await tg(env, "sendMessage", { chat_id: chat, text: r.text, parse_mode: "HTML", reply_to_message_id: m.message_id,
+        link_preview_options: { is_disabled: true }, ...(r.button ? { reply_markup: { inline_keyboard: [[r.button]] } } : {}) }));
+    } catch {
+      return void (await tg(env, "sendMessage", { chat_id: chat, text: "Couldn't read that wallet right now, try again in a minute." }));
+    }
   }
   if (cmd === "/watches") {
     const ws = W.mine(await W.load(env.FEED), uid);

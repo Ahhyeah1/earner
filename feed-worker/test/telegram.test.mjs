@@ -200,3 +200,64 @@ test("MCP: initialize, list, call, bad input, limit", async () => {
   for (let i = 0; i < M.FREE_PER_IP_DAY; i++) await call({ jsonrpc: "2.0", id: 5, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: MINT } } }, "2.2.2.2");
   assert.match((await call({ jsonrpc: "2.0", id: 6, method: "tools/call", params: { name: "check_solana_token", arguments: { mint: MINT } } }, "2.2.2.2")).result.content[0].text, /Free limit/);
 });
+
+// ---- Rug Graveyard ----
+const G = T.G;
+const OWNER = "4U6pdNLKMjNz68giUMXGmQHoCpsUqYyT32nfvD5dh5vb", FEEW = "4px5eCg2hVXzFY4jguRQmQ4YUyJ5pXPPLJGPnHba6GLg";
+const HASH = "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm";
+const acct = (i, info, lamports = 2039280) => ({ pubkey: G.b58encode(Uint8Array.from({ length: 32 }, (_, j) => (i * 7 + j + 1) % 256)),
+  account: { lamports, data: { parsed: { info: { mint: MINT, owner: OWNER, state: "initialized", tokenAmount: { amount: "0" }, ...info } } } } });
+
+test("base58 round-trips and validates addresses", () => {
+  for (const a of [OWNER, G.SYSTEM, G.REFERENCE, G.TOKEN22]) assert.equal(G.b58encode(G.pubkey(a)), a);
+  assert.equal(G.isAddress(OWNER), true); assert.equal(G.isAddress("abc"), false); assert.equal(G.isAddress("0OIl"), false);
+});
+
+test("classify: only empty, unfrozen, owner-closable accounts with safe extensions", () => {
+  const c = G.classify(OWNER, [
+    acct(1, {}), acct(2, { tokenAmount: { amount: "5" } }), acct(3, { state: "frozen" }), acct(4, { isNative: true }),
+    acct(5, { closeAuthority: "Evil1111111111111111111111111111" }), acct(6, { closeAuthority: OWNER }),
+    acct(7, { extensions: [{ extension: "immutableOwner" }, { extension: "pausableAccount" }, { extension: "transferHookAccount" }] }),
+    acct(8, { extensions: [{ extension: "transferFeeAmount", state: { withheldAmount: 99 } }] }),
+    acct(9, { extensions: [{ extension: "confidentialTransferAccount" }] }), acct(10, { owner: "Someone1111111111111111111111111" }),
+  ], G.TOKEN);
+  assert.equal(c.closable.length, 3); assert.equal(c.withBalance, 1); assert.equal(c.skipped, 6);
+});
+
+function parseTx(tx) {          // independent decoder for the legacy wire format (single-byte compact lengths here)
+  let o = 0; const nsig = tx[o++]; o += 64 * nsig;
+  const header = [tx[o++], tx[o++], tx[o++]]; const nkeys = tx[o++];
+  const keys = []; for (let i = 0; i < nkeys; i++) { keys.push(G.b58encode(tx.slice(o, o + 32))); o += 32; }
+  const hash = G.b58encode(tx.slice(o, o + 32)); o += 32;
+  const nix = tx[o++], ixs = [];
+  for (let i = 0; i < nix; i++) { const prog = keys[tx[o++]]; const na = tx[o++]; const acc = [...tx.slice(o, o + na)].map((k) => keys[k]); o += na; const nd = tx[o++]; ixs.push({ prog, acc, data: [...tx.slice(o, o + nd)] }); o += nd; }
+  return { nsig, header, keys, hash, ixs, rest: tx.length - o };
+}
+
+test("build: exact instructions, fee math, size limit, fee skipped when it can't land", () => {
+  const accs = G.classify(OWNER, Array.from({ length: 30 }, (_, i) => acct(i + 1, {})), G.TOKEN).closable;
+  const b = G.build(OWNER, accs, FEEW, HASH, 5_000_000);
+  assert.ok(b.tx.length <= G.TX_LIMIT); assert.equal(b.closed.length, 20);
+  const p = parseTx(b.tx);
+  assert.equal(p.rest, 0); assert.equal(p.nsig, 1); assert.equal(p.keys[0], OWNER); assert.equal(p.hash, HASH);
+  assert.deepEqual(p.header, [1, 0, 3]);                              // token program, system program, reference read-only
+  const closes = p.ixs.filter((x) => x.prog === G.TOKEN);
+  assert.equal(closes.length, 20);
+  for (const x of closes) { assert.deepEqual(x.data, [9]); assert.equal(x.acc[1], OWNER); assert.equal(x.acc[2], OWNER); }
+  const t = p.ixs.filter((x) => x.prog === G.SYSTEM);
+  assert.equal(t.length, 1); assert.deepEqual(t[0].acc, [OWNER, FEEW, G.REFERENCE]);
+  const lam = t[0].data.slice(4).reduce((s, x, i) => s + x * 2 ** (8 * i), 0);
+  assert.equal(lam, Math.floor(20 * 2039280 / 10)); assert.equal(lam, b.fee);
+  assert.equal(p.ixs.length, 21, "nothing else in the transaction");
+  assert.equal(G.build(OWNER, accs.slice(0, 2), FEEW, HASH, 0).fee, 0, "tiny fee into an empty wallet would fail: skipped");
+  assert.equal(G.build(OWNER, accs, OWNER, HASH, 5_000_000).fee, 0, "no fee to yourself");
+  assert.equal(parseTx(G.build(OWNER, accs.slice(0, 2), FEEW, HASH, 0).tx).ixs.length, 2);
+});
+
+test("report text and button", () => {
+  const accs = G.classify(OWNER, Array.from({ length: 25 }, (_, i) => acct(i + 1, {})), G.TOKEN).closable;
+  const r = G.report({ owner: OWNER, closable: accs, withBalance: 3, skipped: 0, lamports: 25 * 2039280 }, "https://dial.to/x");
+  assert.match(r.text, /Found <b>25<\/b>/); assert.match(r.text, /0\.0510 SOL/); assert.match(r.text, /2 rounds/);
+  assert.match(r.button.text, /0\.046 SOL/);
+  assert.equal(G.report({ owner: OWNER, closable: [], withBalance: 0, skipped: 0, lamports: 0 }, "x").button, undefined);
+});

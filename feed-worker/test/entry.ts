@@ -3,3 +3,4 @@ export * from "../src/telegram";
 export * as W from "../src/watch";
 export * as E from "../src/events";
 export * as M from "../src/mcp";
+export * as G from "../src/graveyard";

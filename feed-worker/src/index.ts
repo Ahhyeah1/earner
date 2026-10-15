@@ -21,6 +21,7 @@ import { intake, landing } from "./grants";
 import { handleUpdate, tg, check } from "./telegram";
 import * as E from "./events";
 import { handle as mcp } from "./mcp";
+import * as G from "./graveyard";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
 
@@ -39,6 +40,7 @@ export type Bindings = {
   TG_SECRET?: string;                // secret: verifies that webhook calls really come from Telegram
   NTFY_TOPIC?: string;               // secret: owner's ntfy topic for sale notifications
   TG_CHANNEL?: string;               // optional: "@channel" the bot (as admin) posts the daily rug radar to
+  GRAVEYARD_OFF?: string;            // "1" pauses Graveyard transactions (kill switch)
   INTERNAL_KEY?: string;             // secret: lets our own Apify Actor call the risk check (Apify bills its users)
 };
 
@@ -125,6 +127,34 @@ app.get("/internal/token-risk", async (c) => {
   try { return c.json(await check(c.env, mint!)); }
   catch (e: any) { return e instanceof NotAMint ? c.json({ error: "not a token mint" }, 404) : c.json({ error: "chain data unavailable" }, 503); }
 });
+
+// Rug Graveyard as a Solana Action (Blink): GET = card, POST {account} = unsigned close-empty-accounts tx.
+const BASE = "https://earner-feed.earner-feed.workers.dev";
+app.get("/actions.json", () => G.actionJson({ rules: [{ pathPattern: "/graveyard/**", apiPath: "/graveyard/**" }] }));
+app.options("/actions.json", () => G.actionOptions());
+app.options("/graveyard/action", () => G.actionOptions());
+app.get("/graveyard/action", () => G.actionJson(G.actionMeta(BASE)));
+app.post("/graveyard/action", async (c) => {
+  if (c.env.GRAVEYARD_OFF === "1" || !c.env.PAY_TO_SOLANA) return G.actionJson({ message: "Rug Graveyard is paused, try again later." }, 503);
+  const body: any = await c.req.json().catch(() => ({}));
+  if (!G.isAddress(body.account)) return G.actionJson({ message: "Connect a Solana wallet first." }, 400);
+  const rpc = c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+  try {
+    const s = await G.scan(body.account, rpc);
+    if (!s.closable.length) return G.actionJson({ message: "No empty token accounts to close in this wallet. Clean! 🧹" }, 422);
+    const [hash, feeBal] = await Promise.all([G.latestBlockhash(rpc), G.balance(rpc, c.env.PAY_TO_SOLANA)]);
+    const b = G.build(body.account, s.closable, c.env.PAY_TO_SOLANA, hash, feeBal);
+    const left = s.closable.length - b.closed.length;
+    return G.actionJson({ type: "transaction", transaction: G.b64(b.tx),
+      message: `Closing ${b.closed.length} empty account(s): +${G.sol(b.reclaimed - b.fee)} SOL to you, ${b.fee ? G.sol(b.fee) + " SOL fee" : "no fee this time"}.`
+        + (left ? ` ${left} more left: run it again after this one confirms.` : "") });
+  } catch {
+    return G.actionJson({ message: "Couldn't read the chain right now, try again in a minute." }, 503);
+  }
+});
+app.get("/graveyard/icon.svg", () => new Response(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1b1530"/><circle cx="256" cy="150" r="70" fill="#f5d76e" opacity=".9"/><path d="M176 470V250a80 80 0 0 1 160 0v220z" fill="#8f8aa8"/><path d="M256 270v110M216 310h80" stroke="#1b1530" stroke-width="18" stroke-linecap="round"/><rect y="440" width="512" height="72" fill="#2c5f3a"/><text x="256" y="500" font-family="sans-serif" font-size="40" font-weight="700" fill="#f5d76e" text-anchor="middle">+SOL</text></svg>`,
+  { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" } }));
+app.get("/graveyard", (c) => c.redirect(G.dialLink(BASE)));
 
 // Grant-application service (landing page + intake form)
 app.get("/grants", (c) => c.html(landing()));
