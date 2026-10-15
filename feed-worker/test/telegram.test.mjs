@@ -254,10 +254,39 @@ test("build: exact instructions, fee math, size limit, fee skipped when it can't
   assert.equal(parseTx(G.build(OWNER, accs.slice(0, 2), FEEW, HASH, 0).tx).ixs.length, 2);
 });
 
-test("report text and button", () => {
+const scanOf = (closable, extra = {}) => {
+  const byKind = { token: [0, 0], buffer: [0, 0], creator: [0, 0] };
+  for (const c of closable) { byKind[c.kind][0]++; byKind[c.kind][1] += c.lamports; }
+  return { owner: OWNER, closable, withBalance: 3, skipped: 0, lamports: closable.reduce((s, c) => s + c.lamports, 0), byKind,
+           ownerLamports: 50_000_000, rentMin: 650_240, signable: true, ...extra };
+};
+const BUF = { kind: "buffer", address: G.b58encode(new Uint8Array(32).fill(201)), program: G.LOADER, lamports: 3_000_000_000 };
+const VAULT = { kind: "creator", address: G.b58encode(new Uint8Array(32).fill(202)), program: G.PUMP, lamports: 12_000_000_000 };
+
+test("report: per-kind lines, per-tx capped fee, low-balance warning", () => {
   const accs = G.classify(OWNER, Array.from({ length: 25 }, (_, i) => acct(i + 1, {})), G.TOKEN).closable;
-  const r = G.report({ owner: OWNER, closable: accs, withBalance: 3, skipped: 0, lamports: 25 * 2039280 }, "https://dial.to/x");
-  assert.match(r.text, /Found <b>25<\/b>/); assert.match(r.text, /0\.0510 SOL/); assert.match(r.text, /2 rounds/);
+  const r = G.report(scanOf(accs), "https://dial.to/x");
+  assert.match(r.text, /25 empty token account/); assert.match(r.text, /0\.0510 SOL/); assert.match(r.text, /2 rounds/);
   assert.match(r.button.text, /0\.046 SOL/);
-  assert.equal(G.report({ owner: OWNER, closable: [], withBalance: 0, skipped: 0, lamports: 0 }, "x").button, undefined);
+  const big = G.report(scanOf([VAULT, BUF]), "x");
+  assert.match(big.text, /creator fees: <b>12\.0000 SOL/); assert.match(big.text, /1 leftover program-deploy buffer/);
+  assert.match(big.button.text, /14\.000 SOL/, "fee capped at 1 SOL per transaction");
+  assert.doesNotMatch(big.text, /almost no SOL/);
+  assert.match(G.report(scanOf([BUF], { ownerLamports: 0 }), "x").text, /almost no SOL/);
+  assert.equal(G.report(scanOf([]), "x").button, undefined);
+});
+
+test("build: buffer close and creator-fee claim instructions are exact", () => {
+  const EV = G.b58encode(new Uint8Array(32).fill(203));
+  const b = G.build(OWNER, [VAULT, BUF], FEEW, HASH, 5_000_000, EV);
+  const p = parseTx(b.tx);
+  assert.equal(p.rest, 0); assert.equal(p.nsig, 1); assert.equal(p.keys[0], OWNER); assert.equal(p.header[0], 1);
+  const claim = p.ixs.find((x) => x.prog === G.PUMP);
+  assert.deepEqual(claim.acc, [OWNER, VAULT.address, G.SYSTEM, EV, G.PUMP]);
+  assert.deepEqual(claim.data, [20, 22, 86, 123, 198, 28, 219, 132]);
+  const close = p.ixs.find((x) => x.prog === G.LOADER);
+  assert.deepEqual(close.acc, [BUF.address, OWNER, OWNER]); assert.deepEqual(close.data, [5, 0, 0, 0]);
+  assert.equal(b.fee, G.FEE_CAP);
+  assert.equal(p.ixs.length, 3, "claim, close, fee - nothing else");
+  assert.throws(() => G.build(OWNER, [VAULT], FEEW, HASH, 5_000_000), /event authority/);
 });

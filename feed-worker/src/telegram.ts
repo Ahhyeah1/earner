@@ -122,7 +122,7 @@ Send me a token's mint address (or a pump.fun / solscan link) and I'll check it 
 👁 <b>Watchtower:</b> <code>/watch &lt;mint&gt;</code> and I'll alert you if the contract turns dangerous later (mint/freeze authority comes back, risky extensions, big holder moves). 1 free watch · /watches · /unwatch
 
 ${FREE_PER_DAY} free checks a day. /buy for more · /credits · /terms · /paysupport
-🪦 <b>Rug Graveyard:</b> <code>/graveyard &lt;wallet&gt;</code> shows how much SOL is locked in your dead token accounts, and gets it back in one tap.
+🔍 <b>Lost &amp; Found:</b> <code>/lostfound &lt;wallet&gt;</code> finds forgotten SOL (dead token accounts, leftover program buffers, unclaimed pump.fun creator fees) and gets it back in one tap.
 
 In groups: <code>/check &lt;mint&gt;</code> · admins can turn on <code>/guard on</code> (auto-warns on risky tokens)
 📡 Daily rug radar: earner-feed.earner-feed.workers.dev/rugs`;
@@ -240,10 +240,10 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     return void (await tg(env, "sendMessage", { chat_id: chat,
       text: `Free today: ${Math.max(0, FREE_PER_DAY - used)}/${FREE_PER_DAY} · paid checks: ${credits} · watch credits: ${wcredits}` }));
   }
-  if (cmd === "/graveyard" || cmd === "/reclaim") {
+  if (cmd === "/lostfound" || cmd === "/graveyard" || cmd === "/reclaim") {
     const owner = findMint(text);
     if (!owner) return void (await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", text:
-      "🪦 <b>Rug Graveyard</b>\nEvery token you ever held left an empty account with ~0.002 SOL rent locked in it. Send <code>/graveyard &lt;your wallet address&gt;</code> and I'll show how much you can reclaim. Free to check; 10% fee only on what you reclaim." }));
+      "🔍 <b>Lost &amp; Found</b>\nWallets forget SOL: every dead token leaves ~0.002 SOL locked, failed program deploys leave buffers worth SOL, and pump.fun creators often never claim their fees. Send <code>/lostfound &lt;your wallet address&gt;</code> and I'll show what's yours. Free to check; 10% fee (max 1 SOL per transaction) only on what you reclaim." }));
     await tg(env, "sendChatAction", { chat_id: chat, action: "typing" });
     try {
       const r = G.report(await G.scan(owner, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com"), G.dialLink("https://earner-feed.earner-feed.workers.dev"));
