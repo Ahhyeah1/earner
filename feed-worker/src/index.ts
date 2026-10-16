@@ -110,7 +110,8 @@ app.post("/tg/hook", async (c) => {
 // MCP server: the rug check as a tool for AI assistants/agents (free, per-IP daily limit).
 app.options("/mcp", () => new Response(null, { headers: { "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, GET, OPTIONS", "access-control-allow-headers": "content-type, mcp-protocol-version, mcp-session-id" } }));
-app.all("/mcp", (c) => mcp(c.req.raw, { ip: c.req.header("cf-connecting-ip") || "?", check: (m) => check(c.env, m) }));
+app.all("/mcp", (c) => mcp(c.req.raw, { ip: c.req.header("cf-connecting-ip") || "?", check: (m) => check(c.env, m),
+  reclaim: (wallet, coins) => reclaimTx(c.env, wallet, coins) }));
 
 // Rug radar: public log of flagged tokens (last 7 days).
 app.get("/rugs", async (c) => {
@@ -136,26 +137,32 @@ app.get("/actions.json", () => G.actionJson({ rules: [{ pathPattern: "/graveyard
 app.options("/actions.json", () => G.actionOptions());
 app.options("/graveyard/action", () => G.actionOptions());
 app.get("/graveyard/action", () => G.actionJson(G.actionMeta(BASE)));
-app.post("/graveyard/action", async (c) => {
-  if (c.env.GRAVEYARD_OFF === "1" || !c.env.PAY_TO_SOLANA) return G.actionJson({ message: "Lost & Found is paused, try again later." }, 503);
-  const body: any = await c.req.json().catch(() => ({}));
-  if (!G.isAddress(body.account)) return G.actionJson({ message: "Connect a Solana wallet first." }, 400);
-  const rpc = c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+/** Shared by the Blink and the MCP tool: an unsigned reclaim transaction for `account`, or why not. */
+export async function reclaimTx(env: Bindings, account: string, coins: string[]): Promise<{ status: number; message: string; transaction?: string; scan?: G.Scan }> {
+  if (env.GRAVEYARD_OFF === "1" || !env.PAY_TO_SOLANA) return { status: 503, message: "Lost & Found is paused, try again later." };
+  if (!G.isAddress(account)) return { status: 400, message: "Connect a Solana wallet first." };
+  const rpc = env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
   try {
-    const coins = (c.req.query("coins") || "").split(",").filter(Boolean);
-    const s = await G.scan(body.account, rpc, await G.coinRefs(coins));
-    if (!s.closable.length) return G.actionJson({ message: "Nothing to reclaim in this wallet. Clean! 🧹" }, 422);
-    if (!s.signable) return G.actionJson({ message: "This address is a program or multisig account, not a normal wallet. Reclaim from your multisig app instead." }, 422);
-    if (!G.canPayFee(s)) return G.actionJson({ message: "This wallet needs about 0.001 SOL to pay the network fee. Top it up, then try again." }, 422);
-    const [hash, feeBal] = await Promise.all([G.latestBlockhash(rpc), G.balance(rpc, c.env.PAY_TO_SOLANA)]);
-    const b = G.build(body.account, s.closable, c.env.PAY_TO_SOLANA, hash, feeBal, await G.programCtx());
+    const s = await G.scan(account, rpc, await G.coinRefs(coins));
+    if (!s.closable.length) return { status: 422, message: "Nothing to reclaim in this wallet. Clean! 🧹", scan: s };
+    if (!s.signable) return { status: 422, message: "This address is a program or multisig account, not a normal wallet. Reclaim from your multisig app instead.", scan: s };
+    if (!G.canPayFee(s)) return { status: 422, message: "This wallet needs about 0.001 SOL to pay the network fee. Top it up, then try again.", scan: s };
+    const [hash, feeBal] = await Promise.all([G.latestBlockhash(rpc), G.balance(rpc, env.PAY_TO_SOLANA)]);
+    const b = G.build(account, s.closable, env.PAY_TO_SOLANA, hash, feeBal, await G.programCtx());
     const left = s.closable.length - b.closed.length;
-    return G.actionJson({ type: "transaction", transaction: G.b64(b.tx),
+    return { status: 200, transaction: G.b64(b.tx), scan: s,
       message: `Reclaiming ${b.closed.length} item(s): +${G.sol(b.reclaimed - b.fee)} SOL to you, ${b.fee ? G.sol(b.fee) + " SOL fee" : "no fee this time"}.`
-        + (left ? ` ${left} more left: run it again after this one confirms.` : "") });
+        + (left ? ` ${left} more left: run it again after this one confirms.` : "") };
   } catch {
-    return G.actionJson({ message: "Couldn't read the chain right now, try again in a minute." }, 503);
+    return { status: 503, message: "Couldn't read the chain right now, try again in a minute." };
   }
+}
+
+app.post("/graveyard/action", async (c) => {
+  const body: any = await c.req.json().catch(() => ({}));
+  const r = await reclaimTx(c.env, body.account, (c.req.query("coins") || "").split(",").filter(Boolean));
+  return r.transaction ? G.actionJson({ type: "transaction", transaction: r.transaction, message: r.message })
+    : G.actionJson({ message: r.message }, r.status as any);
 });
 app.get("/graveyard/icon.svg", () => new Response(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" fill="#1b1530"/><circle cx="256" cy="150" r="70" fill="#f5d76e" opacity=".9"/><path d="M176 470V250a80 80 0 0 1 160 0v220z" fill="#8f8aa8"/><path d="M256 270v110M216 310h80" stroke="#1b1530" stroke-width="18" stroke-linecap="round"/><rect y="440" width="512" height="72" fill="#2c5f3a"/><text x="256" y="500" font-family="sans-serif" font-size="40" font-weight="700" fill="#f5d76e" text-anchor="middle">+SOL</text></svg>`,
   { headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=86400", "access-control-allow-origin": "*" } }));

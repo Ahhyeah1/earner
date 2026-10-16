@@ -348,3 +348,19 @@ test("fees leaderboard: totals for the last 24h, claim links, shared coins exclu
   const page = R.feesPage(recs, now);
   assert.match(page, /6\.2 SOL/); assert.match(page, /lostfound\?wallet=CreatorAAAA[A-Za-z]*&amp;coins=A/); assert.doesNotMatch(page, /coins=C"/);
 });
+
+test("MCP Lost & Found tools: listed, summary text, unsigned tx returned, bad wallet rejected", async () => {
+  riskyWorld();
+  const W8 = "4U6pdNLKMjNz68giUMXGmQHoCpsUqYyT32nfvD5dh5vb";
+  const reclaim = async (wallet, coins) => ({ status: 200, message: "Reclaiming 2 item(s): +0.5 SOL to you", transaction: "AQID",
+    scan: { lamports: 556e6, closable: [1, 2], byKind: { token: [1, 6e6], buffer: [1, 55e7], creator: [0, 0], swap: [0, 0] } } });
+  const call = async (body) => (await M.handle(new Request("https://x/mcp", { method: "POST", body: JSON.stringify(body) }), { ip: "9.9.9.9", check: async () => ({}), reclaim })).json();
+  const names = (await call({ jsonrpc: "2.0", id: 1, method: "tools/list" })).result.tools.map((t) => t.name);
+  assert.deepEqual(names, ["check_solana_token", "find_forgotten_sol", "build_reclaim_transaction"]);
+  const f = await call({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "find_forgotten_sol", arguments: { wallet: W8 } } });
+  assert.match(f.result.content[0].text, /can reclaim 0\.5560 SOL/); assert.match(f.result.content[0].text, /program-deploy buffers/);
+  assert.equal(f.result.structuredContent.transaction, undefined, "find never returns a transaction");
+  const b = await call({ jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "build_reclaim_transaction", arguments: { wallet: W8 } } });
+  assert.equal(b.result.structuredContent.transaction, "AQID");
+  assert.equal((await call({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "find_forgotten_sol", arguments: { wallet: "nope" } } })).result.isError, true);
+});

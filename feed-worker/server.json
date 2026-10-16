@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.Ahhyeah1/solana-rug-check",
   "title": "Solana Rug Check",
-  "description": "On-chain rug/honeypot check for Solana tokens: authorities, Token-2022 extensions, holder concentration.",
-  "version": "1.0.0",
+  "description": "Solana rug checks + Lost & Found: reclaim SOL locked in dead token accounts, buffers, creator fees",
+  "version": "1.1.0",
   "websiteUrl": "https://github.com/Ahhyeah1/earner",
   "repository": { "url": "https://github.com/Ahhyeah1/earner", "source": "github", "subfolder": "feed-worker" },
   "remotes": [{ "type": "streamable-http", "url": "https://earner-feed.earner-feed.workers.dev/mcp" }]
