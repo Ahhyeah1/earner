@@ -29,9 +29,9 @@ button:disabled{opacity:.6;cursor:wait}.row{display:flex;justify-content:space-b
 const f=document.getElementById("f"),w=document.getElementById("w"),out=document.getElementById("out"),go=document.getElementById("go");
 const sol=(l,d=4)=>(l/1e9).toFixed(d), esc=(s)=>String(s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const label={swap:"Unclaimed PumpSwap creator fees",creator:"Unclaimed pump.fun creator fees",buffer:"Program deploy buffers",token:"Empty token accounts"};
-try{const q=new URLSearchParams(location.search).get("wallet");if(q){w.value=q;setTimeout(()=>f.requestSubmit(),0);}}catch(e){}
+let coins="";try{const sp=new URLSearchParams(location.search);coins=(sp.get("coins")||"").replace(/[^1-9A-HJ-NP-Za-km-z,]/g,"");const q=sp.get("wallet");if(q){w.value=q;setTimeout(()=>f.requestSubmit(),0);}}catch(e){}
 f.addEventListener("submit",async(e)=>{e.preventDefault();const a=w.value.trim();if(!a)return;go.disabled=true;out.textContent="Scanning…";
- try{const r=await fetch("/lostfound/scan?wallet="+encodeURIComponent(a));const j=await r.json();
+ try{const r=await fetch("/lostfound/scan?wallet="+encodeURIComponent(a)+(coins?"&coins="+coins:""));const j=await r.json();
   if(!r.ok){out.innerHTML='<p>'+esc(j.error||"Something went wrong")+'</p>';return;}
   if(!j.total){out.innerHTML='<p>Nothing forgotten in this wallet. Clean! 🧹</p>';return;}
   out.innerHTML=Object.entries(j.kinds).filter(([,v])=>v.count).map(([k,v])=>'<div class="row"><span>'+label[k]+' ('+v.count+')</span><b>'+sol(v.lamports)+' SOL</b></div>').join("")

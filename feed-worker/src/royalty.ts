@@ -239,3 +239,30 @@ export function evidencePage(r: Rec): string {
 <p>This evidence pack is free. If your application succeeds, you can include the agent that found it in your fee split (pump.fun allows up to 10 wallets), for example 5%:</p>
 <p><code>${AGENT_WALLET}</code></p><p class="mut">Entirely voluntary. The agent is an open-source experiment in earning its own running costs: <a href="https://github.com/Ahhyeah1/earner">github.com/Ahhyeah1/earner</a>.</p></div>`);
 }
+
+// ---------------------------------------------------------------- unclaimed creator fees leaderboard
+export function feeStats(recs: Rec[], now = Date.now()) {
+  const day = recs.filter((r) => now - Date.parse(r.analyzedAt) < 86_400_000 && r.verdict !== "shared" && r.verdict !== "skip");
+  const waiting = day.reduce((s, r) => s + r.vaultLamports + r.unsweptLamports, 0);
+  return { coins: day.length, waitingLamports: waiting, over1Sol: day.filter((r) => r.vaultLamports + r.unsweptLamports >= 1e9).length,
+           shared: recs.filter((r) => r.verdict === "shared").length };
+}
+
+export function feesPage(recs: Rec[], now = Date.now()): string {
+  const st = feeStats(recs, now);
+  const top = recs.filter((r) => r.verdict !== "shared" && r.verdict !== "skip" && r.vaultLamports + r.unsweptLamports >= 1e8)
+    .sort((a, b) => (b.vaultLamports + b.unsweptLamports) - (a.vaultLamports + a.unsweptLamports)).slice(0, 60);
+  const rows = top.map((r) => `<tr><td><b>$${esc(r.symbol)}</b><br><span class="mut">${esc(r.name)}</span></td>
+<td class="num"><b>${sol(r.vaultLamports + r.unsweptLamports, 2)} SOL</b></td>
+<td><a href="https://solscan.io/account/${r.creator}" rel="nofollow"><code>${r.creator.slice(0, 4)}…${r.creator.slice(-4)}</code></a></td>
+<td class="num"><a href="/lostfound?wallet=${r.creator}&amp;coins=${r.mint}">Is this yours? Claim →</a></td></tr>`).join("");
+  return shell("Unclaimed Creator Fees", "Live: how much SOL pump.fun creators have left unclaimed, coin by coin. Creators can claim in one tap.", `
+<h1>💸 Unclaimed pump.fun creator fees</h1>
+<p>Every trade on a pump.fun coin pays its creator a fee. Many creators never collect it. Live from the chain:</p>
+<div class="card"><div class="big">${sol(st.waitingLamports, 1)} SOL</div>
+<div class="mut">waiting unclaimed across the ${st.coins} actively traded coins checked in the last 24 hours · ${st.over1Sol} coins with more than 1 SOL each</div></div>
+<div class="card wrap"><table><thead><tr><th>Coin</th><th class="num">Waiting</th><th>Creator</th><th></th></tr></thead>
+<tbody>${rows || '<tr><td colspan="4">Collecting data, check back shortly.</td></tr>'}</tbody></table></div>
+<p class="mut">Creators: <a href="/lostfound">Lost &amp; Found</a> sweeps the fees still sitting in your coins and claims everything to your own wallet in one transaction (fee: 10% of the first 10 SOL, 3% above). You can also claim on pump.fun yourself. Figures include fees not yet swept from the bonding curve; PumpSwap pool fees are added at claim time. Automated public on-chain data.</p>
+<p class="mut">Also: <a href="/royalties">abandoned coins</a> · <a href="https://t.me/Rug1CheckSolBot">rug checks</a> · <a href="https://github.com/Ahhyeah1/earner">open source</a></p>`);
+}

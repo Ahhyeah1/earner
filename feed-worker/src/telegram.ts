@@ -4,6 +4,8 @@ import { assessMint, isMint, type Assessment } from "./risk";
 import * as W from "./watch";
 import * as E from "./events";
 import * as G from "./graveyard";
+import * as PF from "./pumpfees";
+const SITE = "https://earner-feed.earner-feed.workers.dev";
 
 export type TgEnv = {
   FEED: KVNamespace; TG_BOT_TOKEN?: string; TG_SECRET?: string; SOLANA_RPC?: string; NTFY_TOPIC?: string;
@@ -284,9 +286,15 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     const a = await check(env, mint);
     await E.record(env.FEED, a, "check").catch(() => {});
     const footer = left.free > 0 ? `\n\n${left.free} free checks left today` : `\n\n${left.credits} paid checks left`;
-    await tg(env, "sendMessage", { chat_id: chat, text: format(a) + footer, parse_mode: "HTML",
+    // pump.fun coins: show the creator fees waiting (creators and their communities check their own coins a lot).
+    const cf = /pump$/.test(mint) ? await PF.creatorFees(env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", mint).catch(() => null) : null;
+    const showFees = !!cf && !cf.shared && cf.waiting >= 50_000_000;
+    const feeLine = showFees ? `\n\n💸 <b>${(cf!.waiting / 1e9).toFixed(2)} SOL</b> in creator fees waiting unclaimed for this coin's creator.` : "";
+    const buttons: any[][] = [[{ text: "👁 Watch for changes", callback_data: `watch:${mint}` }]];
+    if (showFees) buttons.push([{ text: `💸 Creator? Claim ${(cf!.waiting / 1e9).toFixed(2)} SOL`, url: `${SITE}/lostfound?wallet=${cf!.creator}&coins=${mint}` }]);
+    await tg(env, "sendMessage", { chat_id: chat, text: format(a) + feeLine + footer, parse_mode: "HTML",
       reply_to_message_id: m.message_id, link_preview_options: { is_disabled: true },
-      reply_markup: { inline_keyboard: [[{ text: "👁 Watch for changes", callback_data: `watch:${mint}` }]] } });
+      reply_markup: { inline_keyboard: buttons } });
   } catch (e: any) {
     await refund(env.FEED, uid, left.source);         // give the check back - not the user's fault
     const msg = String(e?.message || "").includes("not a token mint") ? "That address isn't a token mint." : "Couldn't read chain data right now, try again in a minute (no check used).";

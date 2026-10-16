@@ -336,3 +336,15 @@ test("evidence pack: facts, creator wallet, fill-in fields; page escapes names",
   assert.doesNotMatch(page, /<b>X/); assert.match(page, /&lt;b&gt;X/);
   assert.match(R.boardPage([r]), /\/royalties\/m/);
 });
+
+test("fees leaderboard: totals for the last 24h, claim links, shared coins excluded", () => {
+  const now = Date.parse("2026-10-16T12:00:00Z");
+  const recs = [{ ...base, mint: "A", creator: "CreatorAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", vaultLamports: 5e9, unsweptLamports: 1e9, verdict: "active", analyzedAt: "2026-10-16T10:00:00Z" },
+    { ...base, mint: "B", vaultLamports: 2e8, verdict: "abandoned", analyzedAt: "2026-10-16T09:00:00Z" },
+    { ...base, mint: "C", vaultLamports: 9e9, verdict: "shared", analyzedAt: "2026-10-16T09:00:00Z" },
+    { ...base, mint: "D", vaultLamports: 9e9, verdict: "active", analyzedAt: "2026-10-14T09:00:00Z" }];
+  const st = R.feeStats(recs, now);
+  assert.equal(st.coins, 2); assert.equal(st.waitingLamports, 6.2e9); assert.equal(st.over1Sol, 1); assert.equal(st.shared, 1);
+  const page = R.feesPage(recs, now);
+  assert.match(page, /6\.2 SOL/); assert.match(page, /lostfound\?wallet=CreatorAAAA[A-Za-z]*&amp;coins=A/); assert.doesNotMatch(page, /coins=C"/);
+});

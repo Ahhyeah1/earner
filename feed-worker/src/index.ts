@@ -162,6 +162,8 @@ app.get("/graveyard/icon.svg", () => new Response(`<svg xmlns="http://www.w3.org
 app.get("/graveyard", (c) => c.redirect(G.dialLink(BASE)));
 // Royalty Hunter: board of abandoned pump.fun coins + evidence packs for CTO creator-fee applications.
 app.get("/royalties", async (c) => c.html(R.boardPage(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300" }));
+app.get("/fees", async (c) => c.html(R.feesPage(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300" }));
+app.get("/fees.json", async (c) => c.json(R.feeStats(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/royalties.json", async (c) => c.json({ note: "Automated on-chain facts; 'abandoned' is an inference, not an accusation.",
   coins: (await R.board(c.env.FEED)).filter((r) => r.verdict === "abandoned") }, 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/royalties/:mint", async (c) => {
@@ -173,12 +175,13 @@ app.get("/lostfound/scan", async (c) => {
   const w = c.req.query("wallet");
   if (!G.isAddress(w)) return c.json({ error: "That's not a Solana address." }, 400);
   try {
-    const s = await G.scan(w!, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com");
+    const coins = (c.req.query("coins") || "").split(",").filter(Boolean).slice(0, G.MAX_COINS);
+    const s = await G.scan(w!, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", await G.coinRefs(coins));
     const kinds = Object.fromEntries(Object.entries(s.byKind).map(([k, [count, lamports]]) => [k, { count, lamports }]));
     const warning = !s.closable.length ? null : !s.signable ? "This is a program or multisig account, not a normal wallet: reclaim from your multisig app."
       : !G.canPayFee(s) ? "This wallet needs about 0.001 SOL to pay the network fee. Top it up first." : null;
     return c.json({ wallet: w, total: s.lamports, back: s.lamports - G.totalFee(s.closable), kinds, rounds: Math.ceil(s.closable.length / G.MAX_PER_TX),
-      warning, action: G.dialLink(BASE) }, 200, { "Cache-Control": "private, max-age=30" });
+      warning, action: G.dialLink(BASE, coins) }, 200, { "Cache-Control": "private, max-age=30" });
   } catch { return c.json({ error: "Couldn't read the chain right now, try again in a minute." }, 503); }
 });
 

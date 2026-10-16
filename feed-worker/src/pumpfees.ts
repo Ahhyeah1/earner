@@ -59,6 +59,31 @@ export function decodePool(d: Uint8Array): Pool | null {
            creatorFeeBps: u64(d, 261), holderReward: d.length > 270 && d[270] === 1, creatorFees: u64(d, 279) };
 }
 
+// ---------------------------------------------------------------- creator fees waiting for a coin (read-only)
+async function rpc(url: string, method: string, params: unknown[]) {
+  const r: any = await (await fetch(url, { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json();
+  if (r.error) throw new Error(`${method}: ${r.error.message}`);
+  return r.result;
+}
+
+export type CreatorFees = { creator: string; waiting: number; creatorLamports: number; shared: boolean };
+/** What the coin's creator could claim right now (vaults + fees still on the curve). Null if not a pump.fun coin.
+ *  (Unswept PumpSwap pool fees aren't included: that needs the pool address; Lost & Found adds them at claim time.) */
+export async function creatorFees(url: string, mint: string): Promise<CreatorFees | null> {
+  const ai = await rpc(url, "getAccountInfo", [await bondingCurve(mint), { encoding: "base64", commitment: "confirmed" }]);
+  const curve = ai?.value && decodeCurve(fromB64(ai.value.data[0]));
+  if (!curve || curve.quoteMint !== WSOL || curve.holderReward) return null;
+  if (curve.creator === await sharingConfig(mint)) return { creator: curve.creator, waiting: 0, creatorLamports: 0, shared: true };
+  const vaultAta = await ata(await swapVaultAuthority(curve.creator), WSOL);
+  const [vault, swap, own] = await Promise.all([
+    rpc(url, "getBalance", [await pumpCreatorVault(curve.creator), { commitment: "confirmed" }]).then((r) => Math.max(0, Number(r.value) - 650_240)),
+    rpc(url, "getTokenAccountBalance", [vaultAta, { commitment: "confirmed" }]).then((r) => Number(r?.value?.amount || 0)).catch(() => 0),
+    rpc(url, "getBalance", [curve.creator, { commitment: "confirmed" }]).then((r) => Number(r.value)),
+  ]);
+  return { creator: curve.creator, waiting: vault + swap + curve.creatorFee, creatorLamports: own, shared: false };
+}
+
 // ---------------------------------------------------------------- sweep instructions (permissionless; payer = owner)
 type Meta = { addr: string; signer?: boolean; writable?: boolean };
 export type Ix = { program: string; keys: Meta[]; data: number[] };
