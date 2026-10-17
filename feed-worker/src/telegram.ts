@@ -332,6 +332,9 @@ ${SITE}/losses?wallet=${w}`
     const feeLine = showFees ? `\n\n💸 <b>${(cf!.waiting / 1e9).toFixed(2)} SOL</b> in creator fees waiting unclaimed for this coin's creator.` : "";
     const buttons: any[][] = [[{ text: "👁 Watch for changes", callback_data: `watch:${mint}` }]];
     if (showFees) buttons.push([{ text: `💸 Creator? Claim ${(cf!.waiting / 1e9).toFixed(2)} SOL`, url: `${SITE}/lostfound?wallet=${cf!.creator}&coins=${mint}` }]);
+    // Selling is always offered (getting out of a risky token helps); buying only on low/medium risk (the Action enforces it).
+    buttons.push([{ text: a.level === "low" || a.level === "medium" ? "💱 Trade (buy / sell)" : "🚪 Sell this token",
+      url: `https://dial.to/?action=${encodeURIComponent(`solana-action:${SITE}/swap/action?mint=${mint}`)}` }]);
     await tg(env, "sendMessage", { chat_id: chat, text: format(a) + feeLine + footer, parse_mode: "HTML",
       reply_to_message_id: m.message_id, link_preview_options: { is_disabled: true },
       reply_markup: { inline_keyboard: buttons } });

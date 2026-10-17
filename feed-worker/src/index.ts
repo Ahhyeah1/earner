@@ -26,6 +26,7 @@ import { PAGE as LOSTFOUND_PAGE } from "./lostfound_page";
 import * as R from "./royalty";
 import * as LR from "./lossreport";
 import * as AD from "./agentdata";
+import * as SW from "./swap";
 import { PAGE as LOSSES_PAGE } from "./losses_page";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
@@ -248,6 +249,28 @@ app.get("/losses/csv", async (c) => {
   if (!r) return c.text("Report expired.", 404);
   return new Response(LR.csvWithHeader(r), { headers: { "content-type": "text/csv; charset=utf-8",
     "content-disposition": `attachment; filename="pnl-${r.wallet.slice(0, 6)}-${r.generatedAt.slice(0, 10)}.csv"` } });
+});
+// Trade button (Solana Action via Jupiter, small integrator fee). Buy only offered for low/medium-risk tokens.
+app.options("/swap/action", () => G.actionOptions());
+app.get("/swap/action", async (c) => {
+  const mint = c.req.query("mint") || "";
+  if (!isMint(mint)) return G.actionJson({ message: "Missing token." }, 400);
+  let level = "high";
+  try { level = (await check(c.env, mint)).level; } catch { /* unknown: sell only */ }
+  return G.actionJson(SW.meta(BASE, mint, (c.req.query("symbol") || mint.slice(0, 4)).slice(0, 12), level === "low" || level === "medium"));
+});
+app.post("/swap/action", async (c) => {
+  const mint = c.req.query("mint") || "", side = c.req.query("side") === "buy" ? "buy" : "sell", v = Number(c.req.query("v"));
+  const { account } = await c.req.json().catch(() => ({} as any));
+  if (!isMint(mint) || !G.isAddress(account)) return G.actionJson({ message: "Connect a Solana wallet first." }, 400);
+  if (side === "buy") {                     // re-check: never offer a buy on a token that has turned risky
+    try { const a = await check(c.env, mint); if (a.level !== "low" && a.level !== "medium") return G.actionJson({ message: "Buying is disabled: this token is now rated high risk." }, 422); }
+    catch { return G.actionJson({ message: "Couldn't verify the token right now." }, 503); }
+  }
+  try {
+    const b = await SW.build(c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", c.env.PAY_TO_SOLANA || "", account, mint, side, v);
+    return G.actionJson({ type: "transaction", transaction: b.transaction, message: b.message });
+  } catch (e: any) { return G.actionJson({ message: String(e?.message || "Swap unavailable").slice(0, 160) }, 422); }
 });
 app.get("/lostfound", (c) => c.html(LOSTFOUND_PAGE, 200, { "Cache-Control": "public, max-age=3600" }));
 app.get("/lostfound/scan", async (c) => {
