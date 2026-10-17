@@ -24,6 +24,8 @@ import { handle as mcp } from "./mcp";
 import * as G from "./graveyard";
 import { PAGE as LOSTFOUND_PAGE } from "./lostfound_page";
 import * as R from "./royalty";
+import * as LR from "./lossreport";
+import { PAGE as LOSSES_PAGE } from "./losses_page";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
 
@@ -176,6 +178,74 @@ app.get("/royalties.json", async (c) => c.json({ note: "Automated on-chain facts
 app.get("/royalties/:mint", async (c) => {
   const r = (await R.board(c.env.FEED)).find((x) => x.mint === c.req.param("mint"));
   return r ? c.html(R.evidencePage(r), 200, { "Cache-Control": "public, max-age=300" }) : c.text("Not on the board (yet).", 404);
+});
+// Rug Loss Harvester: browser-driven job (one Helius page per request), free preview, paid CSV.
+const heliusKey = (env: Bindings) => (env.SOLANA_RPC || "").match(/api-key=([^&]+)/)?.[1] || "";
+app.get("/losses", (c) => c.html(LOSSES_PAGE, 200, { "Cache-Control": "public, max-age=3600" }));
+app.post("/losses/start", async (c) => {
+  const { wallet } = await c.req.json().catch(() => ({} as any));
+  if (!G.isAddress(wallet)) return c.json({ error: "That's not a Solana address." }, 400);
+  if (!heliusKey(c.env)) return c.json({ error: "Reports are unavailable right now." }, 503);
+  return c.json({ job: await LR.start(wallet) });
+});
+app.post("/losses/step", async (c) => {
+  const { job } = await c.req.json().catch(() => ({} as any));
+  if (!/^[0-9a-f]{24}$/.test(String(job))) return c.json({ error: "bad job" }, 400);
+  return c.json(await LR.step(job, heliusKey(c.env)));
+});
+app.get("/losses/result", async (c) => {
+  const job = c.req.query("job") || "";
+  if (!/^[0-9a-f]{24}$/.test(job)) return c.json({ error: "bad job" }, 400);
+  const r = await LR.finish(job, c.env.FEED, c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com");
+  if ("error" in r) return c.json(r, 409);
+  return c.json({ ...LR.preview(r), paid: await LR.isPaid(c.env.FEED, job), priceUsd: LR.PRICE_USD, priceStars: LR.PRICE_STARS,
+    payAction: `https://dial.to/?action=${encodeURIComponent(`solana-action:${BASE}/losses/pay?job=${job}`)}`,
+    payStars: `https://t.me/Rug1CheckSolBot?start=loss_${job}` });
+});
+const solUsd = LR.solUsdNow;
+app.options("/losses/pay", () => G.actionOptions());
+app.get("/losses/pay", (c) => G.actionJson({ type: "action", icon: `${BASE}/graveyard/icon.svg`, title: "Rug Loss Report",
+  description: `Unlock your full per-token profit & loss CSV (realized losses and gains, dead coins, cost basis in SOL and USD). $${LR.PRICE_USD}, paid in SOL.`,
+  label: `Pay $${LR.PRICE_USD} in SOL`, links: { actions: [{ type: "transaction", label: `Pay $${LR.PRICE_USD} in SOL`, href: `${BASE}/losses/pay?job=${c.req.query("job") || ""}` }] } }));
+app.post("/losses/pay", async (c) => {
+  const job = c.req.query("job") || "";
+  const { account } = await c.req.json().catch(() => ({} as any));
+  if (!/^[0-9a-f]{24}$/.test(job) || !(await LR.stored(c.env.FEED, job))) return G.actionJson({ message: "Report not found: generate it first." }, 404);
+  if (!G.isAddress(account) || !c.env.PAY_TO_SOLANA) return G.actionJson({ message: "Connect a Solana wallet first." }, 400);
+  const px = await solUsd();
+  if (!px) return G.actionJson({ message: "Price feed unavailable, try again in a minute." }, 503);
+  const lamports = Math.ceil(LR.PRICE_USD / px * 1e9);
+  const ref = G.b58encode(await LR.reference(job));
+  const data = [2, 0, 0, 0, ...Array.from({ length: 8 }, (_, i) => Number((BigInt(lamports) >> BigInt(8 * i)) & 255n))];
+  const tx = G.compile(account, [{ program: G.SYSTEM, data, keys: [{ addr: account, signer: true, writable: true },
+    { addr: c.env.PAY_TO_SOLANA, writable: true }, { addr: ref }] }], await G.latestBlockhash(c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com"));
+  return G.actionJson({ type: "transaction", transaction: G.b64(tx), message: `Pays ${(lamports / 1e9).toFixed(4)} SOL ($${LR.PRICE_USD}) for the full report.` });
+});
+/** Paid? Looks for a successful transfer tagged with the job's reference that paid at least 95% of the price. */
+app.get("/losses/check", async (c) => {
+  const job = c.req.query("job") || "";
+  if (!/^[0-9a-f]{24}$/.test(job)) return c.json({ error: "bad job" }, 400);
+  if (await LR.isPaid(c.env.FEED, job)) return c.json({ paid: true });
+  const rpc = c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+  const call = async (m: string, p: unknown[]) => (await (await fetch(rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: m, params: p }) })).json() as any).result;
+  const sigs: any[] = (await call("getSignaturesForAddress", [G.b58encode(await LR.reference(job)), { limit: 5, commitment: "confirmed" }])) || [];
+  const px = await solUsd();
+  for (const sg of sigs.filter((x) => !x.err)) {
+    const tx = await call("getTransaction", [sg.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    const keys = tx?.transaction?.message?.accountKeys?.map((k: any) => k.pubkey) || [];
+    const i = keys.indexOf(c.env.PAY_TO_SOLANA);
+    const got = i >= 0 ? tx.meta.postBalances[i] - tx.meta.preBalances[i] : 0;
+    if (got > 0 && (!px || got / 1e9 * px >= LR.PRICE_USD * 0.95)) { await LR.markPaid(c.env.FEED, job, `sol:${sg.signature}`); return c.json({ paid: true }); }
+  }
+  return c.json({ paid: false });
+});
+app.get("/losses/csv", async (c) => {
+  const job = c.req.query("job") || "";
+  if (!/^[0-9a-f]{24}$/.test(job) || !(await LR.isPaid(c.env.FEED, job))) return c.text("Not unlocked.", 402);
+  const r = await LR.stored(c.env.FEED, job);
+  if (!r) return c.text("Report expired.", 404);
+  return new Response(LR.csvWithHeader(r), { headers: { "content-type": "text/csv; charset=utf-8",
+    "content-disposition": `attachment; filename="pnl-${r.wallet.slice(0, 6)}-${r.generatedAt.slice(0, 10)}.csv"` } });
 });
 app.get("/lostfound", (c) => c.html(LOSTFOUND_PAGE, 200, { "Cache-Control": "public, max-age=3600" }));
 app.get("/lostfound/scan", async (c) => {

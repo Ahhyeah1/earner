@@ -27,7 +27,7 @@ def load_env(path=ROOT / ".env"):
 load_env()
 
 from . import llm as llm_mod  # noqa: E402  (llm reads credentials from the env loaded above)
-from . import assist, discovery, grantsvc, graveyard, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
+from . import assist, discovery, grantsvc, graveyard, sales, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
 from .bb_worker import BBWorker  # noqa: E402
 from .bountybook import BountyBook  # noqa: E402
 from .score import score  # noqa: E402
@@ -237,6 +237,11 @@ def _cycle(store, log):
                        log=log, leads_per_day=pol["hard_caps"].get("max_leads_per_day", 3))
     except Exception as e:
         log(f"  grants: failed ({e!r})")
+    try:      # bot / report sales recorded by the feed worker (Stars, SOL-paid loss reports)
+        if os.environ.get("CF_API_TOKEN"):
+            sales.check_sales(store, ts, notify=lambda key, title, msg, **kw: notify.send(store, key, title, msg, ts=ts, **kw), log=log)
+    except Exception as e:
+        log(f"  sales: check failed ({e!r})")
     try:      # Rug Graveyard: book reclaim fees that landed in the payout wallet
         graveyard.check_income(store, ts, notify=lambda key, title, msg, **kw: notify.send(store, key, title, msg, ts=ts, **kw), log=log)
     except Exception as e:

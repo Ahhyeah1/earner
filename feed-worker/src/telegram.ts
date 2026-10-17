@@ -5,6 +5,7 @@ import * as W from "./watch";
 import * as E from "./events";
 import * as G from "./graveyard";
 import * as PF from "./pumpfees";
+import * as LR from "./lossreport";
 const SITE = "https://earner-feed.earner-feed.workers.dev";
 
 export type TgEnv = {
@@ -187,6 +188,25 @@ async function guard(env: TgEnv, m: any, text: string) {
 const JOINED = `👋 Thanks for adding me! Anyone can type <code>/check &lt;mint&gt;</code> for an on-chain rug check.
 🛡 Admins: <code>/guard on</code> makes me check every Solana token posted here and warn only about high-risk ones.`;
 
+async function lossInvoice(env: TgEnv, chat: number, job: string) {
+  const r = await LR.stored(env.FEED, job);
+  if (!r) return void (await tg(env, "sendMessage", { chat_id: chat, text: "That report has expired. Generate it again on the website." }));
+  if (await LR.isPaid(env.FEED, job)) return sendReport(env, chat, job);
+  await tg(env, "sendInvoice", { chat_id: chat, title: "Rug Loss Report (full CSV)", currency: "XTR", provider_token: "", payload: `loss:${job}`,
+    description: `Per-token profit & loss for ${r.wallet.slice(0, 4)}…${r.wallet.slice(-4)}: ${r.rows.length} tokens, cost basis in SOL and USD, realized losses and gains, dead coins. Data report, not tax advice.`,
+    prices: [{ label: "Full report", amount: LR.PRICE_STARS }] });
+}
+
+async function sendReport(env: TgEnv, chat: number, job: string) {
+  const r = await LR.stored(env.FEED, job);
+  if (!r) return void (await tg(env, "sendMessage", { chat_id: chat, text: "Paid ✅ but the report data expired. Reply /paysupport and we'll sort it out." }));
+  const form = new FormData();
+  form.append("chat_id", String(chat));
+  form.append("caption", `🧾 Profit & loss for ${r.wallet.slice(0, 4)}…${r.wallet.slice(-4)}: ${r.rows.length} tokens. Also downloadable at ${SITE}/losses?job=${job}`);
+  form.append("document", new Blob([LR.csvWithHeader(r)], { type: "text/csv" }), `pnl-${r.wallet.slice(0, 6)}-${r.generatedAt.slice(0, 10)}.csv`);
+  await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
+}
+
 export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   const joined = u.my_chat_member;
   if (joined && joined.chat.type !== "private" && ["member", "administrator"].includes(joined.new_chat_member?.status)
@@ -194,7 +214,8 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
     return void (await tg(env, "sendMessage", { chat_id: joined.chat.id, text: JOINED, parse_mode: "HTML" }));
   }
   if (u.pre_checkout_query) {
-    const ok = !!PACKS[String(u.pre_checkout_query.invoice_payload || "").replace("pack:", "")];
+    const payload = String(u.pre_checkout_query.invoice_payload || "");
+    const ok = payload.startsWith("loss:") ? !!(await LR.stored(env.FEED, payload.slice(5))) : !!PACKS[payload.replace("pack:", "")];
     await tg(env, "answerPreCheckoutQuery", { pre_checkout_query_id: u.pre_checkout_query.id, ok,
       ...(ok ? {} : { error_message: "Unknown product, please try /buy again." }) });
     return;
@@ -209,6 +230,16 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   const m = u.message;
   if (!m || !m.from) return;
   const chat = m.chat.id, uid = m.from.id;
+  if (m.successful_payment && String(m.successful_payment.invoice_payload).startsWith("loss:")) {
+    const job = String(m.successful_payment.invoice_payload).slice(5);
+    await LR.markPaid(env.FEED, job, `stars:${m.successful_payment.telegram_payment_charge_id}`);
+    await env.FEED.put(`tg:charge:${m.successful_payment.telegram_payment_charge_id}`,
+      JSON.stringify({ uid, stars: m.successful_payment.total_amount, pack: "loss report", job, at: new Date().toISOString() }));
+    await sendReport(env, chat, job);
+    if (env.NTFY_TOPIC) await fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, { method: "POST", body: `Loss report sold for ${m.successful_payment.total_amount} Stars`,
+      headers: { Title: "Telegram bot sale", Tags: "moneybag" } }).catch(() => {});
+    return;
+  }
   if (m.successful_payment) {
     const pack = PACKS[String(m.successful_payment.invoice_payload).replace("pack:", "")];
     if (!pack) return;
@@ -230,6 +261,15 @@ export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   const text: string = m.text || m.caption || "";
   const group = m.chat.type !== "private";
   const cmd = text.trim().split(/\s+/)[0].split("@")[0].toLowerCase();
+  const arg = text.trim().split(/\s+/)[1] || "";
+  if (cmd === "/start" && /^loss_[0-9a-f]{24}$/.test(arg)) return void (await lossInvoice(env, chat, arg.slice(5)));
+  if (cmd === "/losses") {
+    const w = findMint(text);
+    return void (await tg(env, "sendMessage", { chat_id: chat, parse_mode: "HTML", link_preview_options: { is_disabled: true }, text: w
+      ? `🧾 <b>Rug Loss Report</b> for <code>${w}</code>: every coin you traded as a profit &amp; loss line, plus dead coins. Free preview, full CSV ${LR.PRICE_STARS} ⭐.
+${SITE}/losses?wallet=${w}`
+      : `🧾 <b>Rug Loss Report</b>: send <code>/losses &lt;your wallet&gt;</code>. Realized losses and gains per coin, dead coins, cost basis in SOL and USD. Free preview.` }));
+  }
   if (cmd === "/start" || cmd === "/help") return void (await tg(env, "sendMessage", { chat_id: chat, text: HELP, parse_mode: "HTML" }));
   if (cmd === "/terms") return void (await tg(env, "sendMessage", { chat_id: chat, text: TERMS, parse_mode: "HTML" }));
   if (cmd === "/paysupport") return void (await tg(env, "sendMessage", { chat_id: chat,

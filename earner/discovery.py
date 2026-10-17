@@ -129,7 +129,7 @@ def performance_summary(store):
 
 
 def run(store, llm, ts, log=print, force=False):
-    if not force and not due(store):
+    if not force and not due(store, datetime.fromisoformat(ts)):      # the cycle's time, not the wall clock
         return 0
     known = KNOWN + [r[0] for r in store.db.execute("SELECT name FROM ideas")]
     prompt = (

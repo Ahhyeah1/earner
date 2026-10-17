@@ -364,3 +364,30 @@ test("MCP Lost & Found tools: listed, summary text, unsigned tx returned, bad wa
   assert.equal(b.result.structuredContent.transaction, "AQID");
   assert.equal((await call({ jsonrpc: "2.0", id: 4, method: "tools/call", params: { name: "find_forgotten_sol", arguments: { wallet: "nope" } } })).result.isError, true);
 });
+
+// ---- Rug Loss Harvester ----
+const L = T.L;
+const W0 = "Wa11et1111111111111111111111111111111111111";
+const swap = (ts, solLamports, mint, qty, extra = {}) => ({ timestamp: ts, type: "SWAP", feePayer: W0, fee: 5000, signature: "s" + ts,
+  accountData: [{ account: W0, nativeBalanceChange: solLamports - 5000 }],
+  tokenTransfers: [{ mint, tokenAmount: Math.abs(qty), toUserAccount: qty > 0 ? W0 : "Pool", fromUserAccount: qty > 0 ? "Pool" : W0 }], ...extra });
+test("loss accounting: buys/sells, average cost, USD by day, dead coins, CSV", () => {
+  const s = L.newState(W0);
+  const d1 = Date.UTC(2026, 2, 1) / 1000, d2 = Date.UTC(2026, 5, 1) / 1000;
+  assert.equal(L.applyTx(s, swap(d1, -2e9, "RUG", 1000)), "trade");          // buy 1000 RUG for 2 SOL
+  L.applyTx(s, swap(d2, 0.5e9, "RUG", -500));                                 // sell half for 0.5 SOL
+  L.applyTx(s, swap(d1, -1e9, "DEAD", 100));                                  // still held, worthless
+  L.applyTx(s, swap(d1, -1e9, "WIN", 10)); L.applyTx(s, swap(d2, 3e9, "WIN", -10));
+  assert.equal(L.applyTx(s, { ...swap(d1, 0, "X", 5), accountData: [{ account: W0, nativeBalanceChange: -5000 }] }), "skip", "no SOL leg");
+  assert.equal(L.applyTx(s, { type: "TRANSFER", accountData: [], tokenTransfers: [] }), "ignore");
+  const prices = { "2026-03-01": 100, "2026-06-01": 200 };
+  const rows = L.summarize(s, prices, { RUG: 500, DEAD: 100, WIN: 0 }, { RUG: 0.0001, WIN: 1 });
+  const by = Object.fromEntries(rows.map((r) => [r.mint, r]));
+  // RUG: cost 2 SOL @100 = $200 for 1000 -> $0.2 each; sold 500 for 0.5 SOL @200 = $100 -> realized 100 - 100 = 0
+  assert.equal(Math.round(by.RUG.realizedUsd), 0); assert.equal(by.RUG.status, "dead");        // 500 left worth $0.05
+  assert.equal(by.DEAD.status, "dead"); assert.equal(Math.round(by.DEAD.unrealizedUsd), -100);
+  assert.equal(by.WIN.status, "realized-gain"); assert.equal(Math.round(by.WIN.realizedUsd), 600 - 100);
+  const t = L.totals(rows, 2026);
+  assert.equal(t.deadCount, 2); assert.equal(Math.round(t.realizedGainUsd), 500);
+  const c = L.csv(rows); assert.match(c.split("\n")[0], /^token,mint,status/); assert.equal(c.split("\n").length, 4);
+});
