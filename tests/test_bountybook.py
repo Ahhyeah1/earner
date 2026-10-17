@@ -120,3 +120,24 @@ class Flow(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GeminiSandboxFallback(unittest.TestCase):
+    def test_verify_uses_gemini_and_requires_unmodified_script(self):
+        from earner import bb_worker as b
+
+        class FakeLLM:
+            down, spent, left = {"claude": "credits"}, 0.0, 5.0
+            def __init__(self, tamper):
+                self.tamper = tamper
+            def run_python(self, code, note):
+                marker = code.rsplit("'", 2)[-2].split(" EXIT=")[0] if False else code.split("print('")[-1].split(" EXIT=")[0]
+                import hashlib
+                h = hashlib.sha256(b"x = 1\n").hexdigest()
+                return {"executed": [code + ("\n# edited" if self.tamper else "")], "output": f"{h} a.py\n{marker} EXIT=0", "usd": 0.002}
+
+        for tamper, want in ((False, True), (True, False)):
+            w = b.BBWorker.__new__(b.BBWorker)
+            w.llm, w.gemini_mode = FakeLLM(tamper), True
+            ok, _ = w._verify({"id": "job12345"}, {"a.py": "x = 1\n"}, "python", "assert True")
+            self.assertEqual(ok, want)

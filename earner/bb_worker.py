@@ -1,8 +1,9 @@
 """BountyBook worker: solve -> verify against the job's own tests -> claim -> submit.
 
-Verification runs a fixed script in Anthropic's code-execution sandbox (never on this PC) and is
+Verification runs a fixed script in a cloud code-execution sandbox (never on this PC) and is
 judged from the sandbox's raw stdout, not from the model's own claims: the output must show the
-exact sha256 of every file we will submit and the test's exit code 0.
+exact sha256 of every file we will submit and the test's exit code 0. Claude's sandbox when available;
+otherwise Gemini's (Python jobs only), and then the sandbox must have run our script unmodified.
 """
 import base64
 import hashlib
@@ -10,7 +11,7 @@ import json
 import secrets
 
 from .bountybook import ApiError
-from .llm import BudgetExceeded, Refused
+from .llm import BudgetExceeded, NoProvider, Refused
 
 CODE_EXEC = {"type": "code_execution_20260521", "name": "code_execution"}
 WEB = [{"type": "web_search_20260209", "name": "web_search", "max_uses": 8},
@@ -75,6 +76,33 @@ def verify_script(files, test_code, language, marker):
     return "\n".join(lines)
 
 
+def verify_script_py(files, test_code, marker):
+    """Same checks as verify_script, as one Python program (Gemini's sandbox runs Python only)."""
+    payload = {n: base64.b64encode(c.encode()).decode() for n, c in list(files.items()) + [("test_job.py", test_code)]}
+    return "\n".join([
+        "import base64, hashlib, os, runpy, sys, tempfile, traceback",
+        "d = tempfile.mkdtemp(); os.chdir(d); sys.path.insert(0, d)",
+        f"FILES = {json.dumps(payload)}",
+        "for n, b in FILES.items():",
+        "    open(n, 'wb').write(base64.b64decode(b))",
+        f"for n in {json.dumps(list(files))}:",
+        "    print(hashlib.sha256(open(n, 'rb').read()).hexdigest(), n)",
+        "code = 0",
+        "try:",
+        "    runpy.run_path('test_job.py', run_name='__main__')",
+        "except SystemExit as e:",
+        "    code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)",
+        "except BaseException:",
+        "    traceback.print_exc(); code = 1",
+        f"print('{marker} EXIT=' + str(code))",
+    ])
+
+
+def ran_unmodified(executed, script):
+    norm = lambda t: "\n".join(line.rstrip() for line in t.strip().splitlines())
+    return any(norm(e) == norm(script) for e in executed)
+
+
 def sandbox_stdout(resp):
     out = []
     for b in resp.content:
@@ -98,6 +126,7 @@ class BBWorker:
     def __init__(self, store, bb, llm, now_iso, jobs_left, log=print):
         self.store, self.bb, self.llm, self.now, self.log = store, bb, llm, now_iso, log
         self.jobs_left = jobs_left
+        self.gemini_mode = "claude" in getattr(llm, "down", {})      # Claude's sandbox unavailable -> Gemini, Python only
         from .memory import recall
         self.lessons = recall(store, ("bountybook", "general"))
 
@@ -130,6 +159,8 @@ class BBWorker:
             return
         jobs = [j for j in self.bb.open_jobs() if not self.store.handled("bb:" + j["id"])]
         todo = [j for j in jobs if supported(j)]
+        if self.gemini_mode:
+            todo = [j for j in todo if j["spec"]["success_condition"]["language"] == "python"]
         # best pay per estimated minute first
         todo.sort(key=lambda j: -float(j["budget_usdc"]) / max(5, j.get("estimated_minutes") or 20))
         self.log(f"  bountybook: {len(jobs)} open & new, {len(todo)} testable in supported languages")
@@ -138,7 +169,14 @@ class BBWorker:
             if done >= min(max_jobs, self.jobs_left):
                 break
             try:
-                done += self._attempt(job)
+                try:
+                    done += self._attempt(job)
+                except NoProvider:
+                    if self.gemini_mode or job["spec"]["success_condition"]["language"] != "python":
+                        raise
+                    self.gemini_mode = True                       # switch to Gemini's sandbox and retry this job
+                    self.log("  bountybook: Claude unavailable, using Gemini's Python sandbox")
+                    done += self._attempt(job)
             except BudgetExceeded as e:
                 self.log(f"  stopping: {e}")
                 break
@@ -175,8 +213,9 @@ class BBWorker:
             if self.llm.spent - start > cap:
                 self._record(job, "skipped", f"cost cap ${cap:.2f} reached before a passing solution")
                 return 0
-            tools = WEB if research else [CODE_EXEC]
+            tools = WEB if research else (None if self.gemini_mode else [CODE_EXEC])
             how = ("Use web search/fetch to get real, current data." if research else
+                   "Write the files so the test passes; think through every assertion carefully." if self.gemini_mode else
                    "Write the files, then run the test yourself with the code execution tool and fix "
                    "until it passes.")
             resp = self.llm.call(SYSTEM, brief + feedback + f"\n{how}\nReturn the final contents of every "
@@ -198,6 +237,12 @@ class BBWorker:
 
     def _verify(self, job, files, lang, test_code):
         marker = "EARNER-" + secrets.token_hex(6)
+        if self.gemini_mode:
+            script = verify_script_py(files, test_code, marker)
+            r = self.llm.run_python(script, f"bb verify {job['id'][:8]}")
+            if not ran_unmodified(r["executed"], script):
+                return False, "sandbox did not run the verification script unmodified"
+            return passed(r["output"], files, marker), r["output"]
         script = verify_script(files, test_code, lang, marker)
         resp = self.llm.call(
             "You are a test runner. Run the given bash script exactly once, unmodified, with the bash "

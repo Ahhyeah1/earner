@@ -85,6 +85,34 @@ def _strip_json(text):
         raise
 
 
+def run_python(code, max_tokens=4000):
+    """Run `code` once in Gemini's code-execution sandbox (Google's cloud, never this PC).
+    Returns dict(executed=[code strings the sandbox actually ran], output=str, usd). Callers must check that
+    `executed` contains their code unmodified before trusting `output`."""
+    m = model()
+    body = {"systemInstruction": {"parts": [{"text": "You are a test runner. Execute the user's Python program exactly once, "
+                                                     "unmodified, with the code execution tool. Do not edit, fix or rerun it. "
+                                                     "Then reply with the single word DONE."}]},
+            "contents": [{"role": "user", "parts": [{"text": "Run this program exactly as written:\n\n" + code}]}],
+            "tools": [{"codeExecution": {}}],
+            "generationConfig": {"maxOutputTokens": max_tokens, "thinkingConfig": {"thinkingLevel": "low"}}}
+    try:
+        resp = _post(m, body)
+    except GeminiError as e:
+        if e.status != 400:
+            raise
+        body["generationConfig"].pop("thinkingConfig", None)
+        resp = _post(m, body)
+    parts = ((resp.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    executed = [p["executableCode"].get("code", "") for p in parts if "executableCode" in p]
+    output = "\n".join(p["codeExecutionResult"].get("output", "") for p in parts if "codeExecutionResult" in p)
+    u = resp.get("usageMetadata") or {}
+    pin, pout = PRICES.get(m, PRICES[DEFAULT_MODEL])
+    tin = u.get("promptTokenCount", 0) + u.get("toolUsePromptTokenCount", 0)
+    tout = u.get("candidatesTokenCount", 0) + u.get("thoughtsTokenCount", 0)
+    return {"executed": executed, "output": output, "model": m, "usd": 0.0 if free_tier() else tin * pin + tout * pout}
+
+
 def generate(system, prompt, schema=None, web=False, max_tokens=16000, effort="medium"):
     """Returns dict(text, parsed, model, input_tokens, output_tokens, usd, finish)."""
     m = model()

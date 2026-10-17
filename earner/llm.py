@@ -116,6 +116,18 @@ class LLM:
         why = "this step needs Claude's code sandbox" if needs_sandbox and gemini.configured() else "no provider left"
         raise NoProvider(f"{note}: {why}" + (f" (last error: {last})" if last else ""))
 
+    def run_python(self, code, note):
+        """Execute code in Gemini's sandbox (used when Claude's sandbox is unavailable). Charged like any call."""
+        if self.left - self.spent < 0.05:
+            raise BudgetExceeded(f"${self.left - self.spent:.2f} left today")
+        if not gemini.configured():
+            raise NoProvider(f"{note}: no Python sandbox available")
+        r = gemini.run_python(code)
+        self.spent += r["usd"]
+        self.charge(r["usd"], f"{note} ({r['model']} code execution)")
+        self.used.add("gemini")
+        return r
+
     def json(self, system, prompt, schema, note, max_tokens=16000):
         return self.call(system, prompt, note, schema=schema, max_tokens=max_tokens).parsed
 
