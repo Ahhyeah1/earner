@@ -7,3 +7,4 @@ export * as G from "../src/graveyard";
 export * as PF from "../src/pumpfees";
 export * as R from "../src/royalty";
 export * as L from "../src/losses";
+export * as AD from "../src/agentdata";

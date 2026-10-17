@@ -25,6 +25,7 @@ import * as G from "./graveyard";
 import { PAGE as LOSTFOUND_PAGE } from "./lostfound_page";
 import * as R from "./royalty";
 import * as LR from "./lossreport";
+import * as AD from "./agentdata";
 import { PAGE as LOSSES_PAGE } from "./losses_page";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
@@ -89,6 +90,7 @@ app.get("/", (c) =>
     paid: { endpoint: "GET /v1/opportunities", price_usd: c.env.PRICE_USD, protocol: "x402",
             accepts: paymentOptions(c.env).map((o) => o.network) },
     free: ["GET /v1/sample", "GET /health"],
+    agent_data: { "GET /v1/creator-fees?mint=": "$0.005", "GET /v1/abandoned": "$0.02", "GET /v1/wallet-pnl?wallet=": "$0.01" },
     token_risk: { endpoint: "GET /v1/token-risk?mint=<solana mint>", price_usd: c.env.RISK_PRICE_USD || "0.002",
                   what: "Contract-level rug/honeypot checks from public on-chain data, score 0-100 with reasons" },
     mcp: { endpoint: "POST /mcp", tool: "check_solana_token", note: "Streamable HTTP MCP server, free with a daily limit" },
@@ -174,7 +176,7 @@ app.get("/royalties", async (c) => c.html(R.boardPage(await R.board(c.env.FEED))
 app.get("/fees", async (c) => c.html(R.feesPage(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300" }));
 app.get("/fees.json", async (c) => c.json(R.feeStats(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/royalties.json", async (c) => c.json({ note: "Automated on-chain facts; 'abandoned' is an inference, not an accusation.",
-  coins: (await R.board(c.env.FEED)).filter((r) => r.verdict === "abandoned") }, 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
+  stats: R.feeStats(await R.board(c.env.FEED)), full_data: "GET /v1/abandoned (x402)" }, 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/royalties/:mint", async (c) => {
   const r = (await R.board(c.env.FEED)).find((x) => x.mint === c.req.param("mint"));
   return r ? c.html(R.evidencePage(r), 200, { "Cache-Control": "public, max-age=300" }) : c.text("Not on the board (yet).", 404);
@@ -288,6 +290,10 @@ const RISK_EXAMPLE = {
 };
 
 // Reject malformed input before anyone pays.
+app.use("/v1/creator-fees", async (c, next) => isMint(c.req.query("mint")) ? next()
+  : c.json({ error: "add ?mint=<pump.fun coin mint>", example: "/v1/creator-fees?mint=Diy4Q5aiNEcdn7CWhuwYtuoHtHD9rKBTHCa9hi4qpump" }, 400));
+app.use("/v1/wallet-pnl", async (c, next) => G.isAddress(c.req.query("wallet")) ? next()
+  : c.json({ error: "add ?wallet=<Solana wallet address>" }, 400));
 app.use("/v1/token-risk", async (c, next) => {
   if (!isMint(c.req.query("mint"))) {
     return c.json({ error: "add ?mint=<Solana token mint address>", example: "/v1/token-risk?mint=" + Object.keys(KNOWN)[0] }, 400);
@@ -330,6 +336,33 @@ const pay = async (c: any, next: any) => {
             return { contentType: "application/json", body: feed ? sample(feed) : {} };
           },
         },
+        "GET /v1/creator-fees": {
+          accepts: paymentOptions(env, "0.005"),
+          description: "pump.fun coin: creator fees waiting unclaimed, creator wallet SOL, whether the creator still holds the coin and "
+            + "when it was last active. A dev-exit signal for trading agents.",
+          mimeType: "application/json", serviceName: "earner creator fees", tags: ["solana", "pump.fun", "creator", "dev", "memecoin", "signal"],
+          extensions: { ...declareDiscoveryExtension({ input: { mint: "Diy4Q5aiNEcdn7CWhuwYtuoHtHD9rKBTHCa9hi4qpump" },
+            inputSchema: { properties: { mint: { type: "string", description: "pump.fun coin mint" } }, required: ["mint"] },
+            output: { example: { mint: "…pump", creator: "…", fee_sharing: false, unclaimed_creator_fees_sol: 218.06, creator_wallet_sol: 13.9,
+              creator_holds_coin: true, creator_last_activity: "2026-10-16T22:50:00.000Z" } } }) },
+        },
+        "GET /v1/abandoned": {
+          accepts: paymentOptions(env, "0.02"),
+          description: "pump.fun coins whose creator left (sold out, inactive 14+ days) while trading continues, plus the largest unclaimed "
+            + "creator-fee piles among actively traded coins. Refreshed every 15 minutes.",
+          mimeType: "application/json", serviceName: "earner abandoned coins", tags: ["solana", "pump.fun", "memecoin", "creator fees", "signal"],
+          extensions: { ...declareDiscoveryExtension({ output: { example: { stats: { coins: 68, waitingLamports: 802675534895, over1Sol: 18, shared: 31 },
+            abandoned: [], largest_unclaimed: [{ mint: "…pump", symbol: "STREAM", fees_waiting_sol: 218.06, est_fees_per_week_sol: 83.4 }] } } }) },
+        },
+        "GET /v1/wallet-pnl": {
+          accepts: paymentOptions(env, "0.01"),
+          description: `Realized profit & loss of a Solana wallet's most recent ${AD.PNL_SWAPS} swaps (SOL-quoted, average cost, USD): win rate, `
+            + "best and worst trade. A sanity check before copy-trading a wallet.",
+          mimeType: "application/json", serviceName: "earner wallet pnl", tags: ["solana", "wallet", "pnl", "copy trading", "trader", "memecoin"],
+          extensions: { ...declareDiscoveryExtension({ input: { wallet: "<solana wallet>" },
+            inputSchema: { properties: { wallet: { type: "string", description: "Solana wallet address" } }, required: ["wallet"] },
+            output: { example: { wallet: "…", swaps_analyzed: 38, realized_pnl_usd: -412, closed_positions: 11, win_rate: 0.273 } } }) },
+        },
         "GET /v1/token-risk": {
           accepts: paymentOptions(env, env.RISK_PRICE_USD || "0.002"),
           description: "Solana token contract-risk check from on-chain data: mint/freeze authority, permanent delegate, "
@@ -361,6 +394,19 @@ const pay = async (c: any, next: any) => {
 };
 app.use("/v1/opportunities", pay);
 app.use("/v1/token-risk", pay);
+app.use("/v1/creator-fees", pay);
+app.use("/v1/abandoned", pay);
+app.use("/v1/wallet-pnl", pay);
+app.get("/v1/creator-fees", async (c) => {
+  try { const r = await AD.creatorFees(c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", c.req.query("mint")!);
+        return r ? c.json(r) : c.json({ error: "not a SOL-paired pump.fun coin" }, 404); }
+  catch { return c.json({ error: "chain data temporarily unavailable" }, 503); }
+});
+app.get("/v1/abandoned", async (c) => c.json(await AD.abandoned(c.env.FEED)));
+app.get("/v1/wallet-pnl", async (c) => {
+  try { return c.json(await AD.walletPnl(heliusKey(c.env), c.req.query("wallet")!)); }
+  catch { return c.json({ error: "history temporarily unavailable" }, 503); }
+});
 
 // Free live demo on one fixed token (cached), so buyers can see a real answer before paying.
 app.get("/v1/token-risk/demo", async (c) => {
