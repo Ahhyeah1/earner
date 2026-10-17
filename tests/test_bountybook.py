@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -85,6 +86,13 @@ class Helpers(unittest.TestCase):
 
 
 class Flow(unittest.TestCase):
+    def setUp(self):
+        # These tests exercise solve/verify/submit mechanics with a code_test job; the never-paid skip is tested separately.
+        import earner.bb_worker as bw
+        p = mock.patch.object(bw, "NEVER_PAID", set())
+        p.start()
+        self.addCleanup(p.stop)
+
     def run_flow(self, llm, bb):
         d = tempfile.TemporaryDirectory()
         self.addCleanup(d.cleanup)
@@ -141,3 +149,27 @@ class GeminiSandboxFallback(unittest.TestCase):
             w.llm, w.gemini_mode = FakeLLM(tamper), True
             ok, _ = w._verify({"id": "job12345"}, {"a.py": "x = 1\n"}, "python", "assert True")
             self.assertEqual(ok, want)
+
+
+class NeverPaidSkip(unittest.TestCase):
+    def test_code_test_jobs_are_skipped_without_spending(self):
+        from earner import bb_worker as b
+
+        class Bomb:
+            down, spent, left = {}, 0.0, 5.0
+            def call(self, *a, **k):
+                raise AssertionError("must not spend on never-paid job types")
+
+        class BB:
+            addr = "0xabc"
+            def open_jobs(self):
+                return [JOB]
+        d = tempfile.TemporaryDirectory()
+        self.addCleanup(d.cleanup)
+        st = Store(Path(d.name) / "t.db")
+        self.addCleanup(st.db.close)
+        logs = []
+        w = b.BBWorker(st, BB(), Bomb(), "2026-10-17T00:00:00", 5, log=logs.append)
+        w.poll_pending = lambda: None
+        w.run()
+        self.assertTrue(any("never paid" in m for m in logs))

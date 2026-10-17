@@ -66,7 +66,9 @@ class BountyBook:
 
     def submit(self, job_id, files):
         return self._req("POST", f"/jobs/{job_id}/submit",
-                         {"executorAddress": self.addr, "outputData": {"files": files}}, auth=True)
+                         # Paid jobs check `required_fields` as top-level keys of outputData, so every file is also
+                         # sent as its own field (the nested "files" object alone was read as "0 lines of code").
+                         {"executorAddress": self.addr, "outputData": {**files, "files": files}}, auth=True)
 
     def status(self, job_id):
         return self._req("GET", f"/jobs/{job_id}/status")

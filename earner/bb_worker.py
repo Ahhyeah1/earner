@@ -23,6 +23,10 @@ RUNNERS = {
     "javascript": ("test_job.mjs", "node test_job.mjs"),
     "bash": ("test_job.sh", "bash test_job.sh"),
 }
+# Job types the platform has never paid out (checked 2026-10-17: 0 of all 54 verified jobs; their checker
+# crashes or counts "0 lines" - 33,950 + 9,134 failed attempts across open jobs). Attempting them only burns
+# AI budget, so they're skipped until the platform's history shows one passing.
+NEVER_PAID = {"code_test"}
 COST_CAP_SHARE = 0.5      # never spend more than half the reward on Claude for one job
 FEE = 0.04                # platform fee on payouts
 
@@ -159,6 +163,10 @@ class BBWorker:
             return
         jobs = [j for j in self.bb.open_jobs() if not self.store.handled("bb:" + j["id"])]
         todo = [j for j in jobs if supported(j)]
+        never = [j for j in todo if j["spec"]["success_condition"].get("type") in NEVER_PAID]
+        if never:
+            self.log(f"  bountybook: skipping {len(never)} job(s) of a type the platform has never paid (its checker fails them)")
+            todo = [j for j in todo if j not in never]
         if self.gemini_mode:
             todo = [j for j in todo if j["spec"]["success_condition"]["language"] == "python"]
         # best pay per estimated minute first
