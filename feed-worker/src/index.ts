@@ -272,6 +272,22 @@ app.post("/swap/action", async (c) => {
     return G.actionJson({ type: "transaction", transaction: b.transaction, message: b.message });
   } catch (e: any) { return G.actionJson({ message: String(e?.message || "Swap unavailable").slice(0, 160) }, 422); }
 });
+// One-time setup: create the payout wallet's wrapped-SOL account that receives swap fees (any wallet can pay the
+// ~0.002 SOL rent; the account always belongs to PAY_TO_SOLANA).
+app.options("/setup/swap-fees", () => G.actionOptions());
+app.get("/setup/swap-fees", (c) => G.actionJson({ type: "action", icon: `${BASE}/graveyard/icon.svg`, title: "Activate swap fees",
+  description: `Creates the wrapped-SOL account of ${(c.env.PAY_TO_SOLANA || "").slice(0, 4)}… that receives the 0.5% swap fee (one-time, ~0.002 SOL rent). Nothing else happens.`,
+  label: "Activate", links: { actions: [{ type: "transaction", label: "Activate (one-time)", href: `${BASE}/setup/swap-fees` }] } }));
+app.post("/setup/swap-fees", async (c) => {
+  const { account } = await c.req.json().catch(() => ({} as any));
+  if (!G.isAddress(account) || !c.env.PAY_TO_SOLANA) return G.actionJson({ message: "Connect a Solana wallet first." }, 400);
+  const rpc = c.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
+  if (await SW.feeAccount(rpc, c.env.PAY_TO_SOLANA)) return G.actionJson({ message: "Already active: swap fees are being collected." }, 422);
+  const ata = await G.ata(c.env.PAY_TO_SOLANA, G.WSOL);
+  const tx = G.compile(account, [{ program: G.ATA_PROGRAM, data: [1], keys: [{ addr: account, signer: true, writable: true }, { addr: ata, writable: true },
+    { addr: c.env.PAY_TO_SOLANA }, { addr: G.WSOL }, { addr: G.SYSTEM }, { addr: G.TOKEN }] }], await G.latestBlockhash(rpc));
+  return G.actionJson({ type: "transaction", transaction: G.b64(tx), message: "Creates the swap-fee account (one-time, ~0.002 SOL)." });
+});
 app.get("/lostfound", (c) => c.html(LOSTFOUND_PAGE, 200, { "Cache-Control": "public, max-age=3600" }));
 app.get("/lostfound/scan", async (c) => {
   const w = c.req.query("wallet");
