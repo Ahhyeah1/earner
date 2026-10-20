@@ -249,7 +249,7 @@ def cycle(store, ts, llm=None, lifetime_left=0.0, log=print):
     if changed:
         notes.append("Self-improvement: adjusted paper meme filters: " + ", ".join(changed))
         log(f"  memory: tuned {changed}")
-    if llm is not None and reflection_due(store) and lifetime_left >= MIN_REFLECT_BUDGET:
+    if llm is not None and reflection_due(store, datetime.fromisoformat(ts)) and lifetime_left >= MIN_REFLECT_BUDGET:
         try:
             out = reflect(store, llm, ts)
             if out:

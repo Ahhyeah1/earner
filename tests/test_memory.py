@@ -1,3 +1,4 @@
+from datetime import datetime
 import tempfile
 import unittest
 from pathlib import Path
@@ -91,7 +92,7 @@ class Reflect(Base):
         text = memory.recall(self.st, ("bountybook",))
         self.assertIn("verify format", text)
         self.assertNotIn("old lesson", text)
-        self.assertFalse(memory.reflection_due(self.st))
+        self.assertFalse(memory.reflection_due(self.st, datetime.fromisoformat(TS)))
 
 
 if __name__ == "__main__":

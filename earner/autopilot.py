@@ -27,7 +27,7 @@ def load_env(path=ROOT / ".env"):
 load_env()
 
 from . import llm as llm_mod  # noqa: E402  (llm reads credentials from the env loaded above)
-from . import assist, discovery, funding, grantsvc, graveyard, sales, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
+from . import assist, discovery, funding, grantsvc, graveyard, paper2, sales, evm, feed, memescan, memory, notify, paper, policy, sources, treasury  # noqa: E402
 from .bb_worker import BBWorker  # noqa: E402
 from .bountybook import BountyBook  # noqa: E402
 from .score import score  # noqa: E402
@@ -168,6 +168,12 @@ def _cycle(store, log):
             store.commit()
         except Exception as e:
             log(f"  paper step failed: {e!r}")
+    paper2_stats = None
+    if budget.can("paper_trading"):
+        try:      # research-backed paper books (trend filter, funding carry) - never touch real money
+            paper2_stats = paper2.step(store, ts, log=log)
+        except Exception as e:
+            log(f"  paper2 step failed: {e!r}")
     try:
         meme = memescan.step(store, ts, log=log)
         store.commit()
@@ -277,7 +283,7 @@ def _cycle(store, log):
         "time": ts, "tier": budget.tier, "profit_usd": budget.profit_usd,
         "income_usd": round(store.total("ledger"), 2), "expenses_usd": round(store.total("expenses"), 4),
         "llm_budget_left_usd": budget.llm_budget_left_usd, "trading_capital_usd": budget.trading_capital_usd,
-        "live_trading": budget.live_trading, "paper": pstats, "paper_meme": meme, "unlocks": budget.unlocks, "notes": notes,
+        "live_trading": budget.live_trading, "paper": pstats, "paper_meme": meme, "paper_research": paper2_stats, "unlocks": budget.unlocks, "notes": notes,
     }
     STATUS.write_text(json.dumps(status, indent=2), encoding="utf-8")
     (ROOT / "data" / "heartbeat.json").write_text(json.dumps({
