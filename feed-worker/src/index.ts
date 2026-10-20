@@ -45,7 +45,8 @@ export type Bindings = {
   TG_BOT_TOKEN?: string;             // secret: Telegram bot token from @BotFather
   TG_SECRET?: string;                // secret: verifies that webhook calls really come from Telegram
   NTFY_TOPIC?: string;               // secret: owner's ntfy topic for sale notifications
-  TG_CHANNEL?: string;               // optional: "@channel" the bot (as admin) posts the daily rug radar to
+  TG_CHANNEL?: string;
+  REF_LINKS?: string;                // owner's trading-terminal referral links (JSON), shown under low/medium-risk verdicts               // optional: "@channel" the bot (as admin) posts the daily rug radar to
   GRAVEYARD_OFF?: string;            // "1" pauses Graveyard transactions (kill switch)
   INTERNAL_KEY?: string;             // secret: lets our own Apify Actor call the risk check (Apify bills its users)
 };

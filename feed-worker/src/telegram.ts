@@ -10,6 +10,7 @@ const SITE = "https://earner-feed.earner-feed.workers.dev";
 
 export type TgEnv = {
   FEED: KVNamespace; TG_BOT_TOKEN?: string; TG_SECRET?: string; SOLANA_RPC?: string; NTFY_TOPIC?: string;
+  REF_LINKS?: string;   // JSON [{"name":"Axiom","url":"https://axiom.trade/@code","perk":"lower fees"}], url may contain {mint}
 };
 
 export const FREE_PER_DAY = 5;
@@ -207,6 +208,14 @@ async function sendReport(env: TgEnv, chat: number, job: string) {
   await fetch(`https://api.telegram.org/bot${env.TG_BOT_TOKEN}/sendDocument`, { method: "POST", body: form });
 }
 
+/** Trading-terminal referral buttons (owner's codes; commission paid to the owner's account). Max 2, https only. */
+export function refButtons(raw: string | undefined, mint: string): { text: string; url: string }[] {
+  let list: any[] = [];
+  try { list = JSON.parse(raw || "[]"); } catch { return []; }
+  return (Array.isArray(list) ? list : []).filter((r) => r && typeof r.name === "string" && /^https:\/\//.test(String(r.url))).slice(0, 2)
+    .map((r) => ({ text: `⚡ Trade on ${r.name.slice(0, 20)}${r.perk ? ` (${String(r.perk).slice(0, 24)})` : ""}`, url: String(r.url).replace("{mint}", mint) }));
+}
+
 export async function handleUpdate(u: any, env: TgEnv): Promise<void> {
   const joined = u.my_chat_member;
   if (joined && joined.chat.type !== "private" && ["member", "administrator"].includes(joined.new_chat_member?.status)
@@ -335,6 +344,7 @@ ${SITE}/losses?wallet=${w}`
     // Selling is always offered (getting out of a risky token helps); buying only on low/medium risk (the Action enforces it).
     buttons.push([{ text: a.level === "low" || a.level === "medium" ? "💱 Trade (buy / sell)" : "🚪 Sell this token",
       url: `https://dial.to/?action=${encodeURIComponent(`solana-action:${SITE}/swap/action?mint=${mint}`)}` }]);
+    if (a.level === "low" || a.level === "medium") for (const b of refButtons(env.REF_LINKS, mint)) buttons.push([b]);
     await tg(env, "sendMessage", { chat_id: chat, text: format(a) + feeLine + footer, parse_mode: "HTML",
       reply_to_message_id: m.message_id, link_preview_options: { is_disabled: true },
       reply_markup: { inline_keyboard: buttons } });

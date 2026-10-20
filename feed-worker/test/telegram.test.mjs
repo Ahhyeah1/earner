@@ -391,3 +391,12 @@ test("loss accounting: buys/sells, average cost, USD by day, dead coins, CSV", (
   assert.equal(t.deadCount, 2); assert.equal(Math.round(t.realizedGainUsd), 500);
   const c = L.csv(rows); assert.match(c.split("\n")[0], /^token,mint,status/); assert.equal(c.split("\n").length, 4);
 });
+
+test("referral buttons: https only, max 2, {mint} filled, bad JSON ignored", () => {
+  const raw = JSON.stringify([{ name: "Axiom", url: "https://axiom.trade/@code", perk: "lower fees" },
+    { name: "Evil", url: "javascript:alert(1)" }, { name: "Photon", url: "https://photon-sol.tinyastro.io/@code?t={mint}" },
+    { name: "Third", url: "https://x.example" }]);
+  const b = T.refButtons(raw, "MINT1");
+  assert.equal(b.length, 2); assert.match(b[0].text, /Axiom \(lower fees\)/); assert.equal(b[1].url, "https://photon-sol.tinyastro.io/@code?t=MINT1");
+  assert.deepEqual(T.refButtons("not json", "m"), []); assert.deepEqual(T.refButtons(undefined, "m"), []);
+});
