@@ -10,7 +10,9 @@
     "PAY_TO_SOLANA": "4px5eCg2hVXzFY4jguRQmQ4YUyJ5pXPPLJGPnHba6GLg",
     "PRICE_USD": "0.01",
     "EVM_NETWORK": "eip155:8453",
-    "SOLANA_NETWORK": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"
+    "SOLANA_NETWORK": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+    // Owner's trading-terminal referral links (commission goes to the owner's account on each platform)
+    "REF_LINKS": "[{\"name\": \"Trojan\", \"url\": \"https://t.me/solana_trojanbot?start=r-freeahhyeah\", \"perk\": \"lower fees\"}]"
   },
   // Watchtower re-checks every 15 minutes (src/watch.ts); daily rug-radar channel post at 18:00 UTC;
   // Royalty Hunter scans a few pump.fun coins every 15 minutes, offset (src/royalty.ts)
