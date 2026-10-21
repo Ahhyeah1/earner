@@ -17,8 +17,17 @@ type State = { pending: Ev[]; done: Ev[] };
 const load = async (kv: KVNamespace): Promise<State> => (await kv.get<State>(KEY, "json")) ?? { pending: [], done: [] };
 
 type Px = { price: number; liq: number };
+/** Jupiter price API first (reliable from Workers, has liquidity), DexScreener for whatever it misses
+ *  (DexScreener rate-limits Cloudflare's shared egress intermittently). */
 export async function prices(mints: string[]): Promise<Record<string, Px>> {
   const out: Record<string, Px> = {};
+  for (let i = 0; i < mints.length; i += 50) {
+    const j: any = await (await fetch(`https://lite-api.jup.ag/price/v3?ids=${mints.slice(i, i + 50).join(",")}`)).json().catch(() => ({}));
+    for (const [m, v] of Object.entries(j || {}) as [string, any][]) {
+      if (v && Number(v.usdPrice) > 0) out[m] = { price: Number(v.usdPrice), liq: Number(v.liquidity || 0) };
+    }
+  }
+  mints = mints.filter((m) => !out[m]);
   for (let i = 0; i < mints.length; i += 30) {
     const pairs: any = await (await fetch(`https://api.dexscreener.com/tokens/v1/solana/${mints.slice(i, i + 30).join(",")}`)).json().catch(() => []);
     for (const p of Array.isArray(pairs) ? pairs : []) {
