@@ -9,3 +9,4 @@ export * as R from "../src/royalty";
 export * as L from "../src/losses";
 export * as AD from "../src/agentdata";
 export * as SW from "../src/swap";
+export * as ES from "../src/eventstudy";

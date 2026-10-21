@@ -400,3 +400,21 @@ test("referral buttons: https only, max 2, {mint} filled, bad JSON ignored", () 
   assert.equal(b.length, 2); assert.match(b[0].text, /Axiom \(lower fees\)/); assert.equal(b[1].url, "https://photon-sol.tinyastro.io/@code?t=MINT1");
   assert.deepEqual(T.refButtons("not json", "m"), []); assert.deepEqual(T.refButtons(undefined, "m"), []);
 });
+
+// ---- event study ----
+test("event study: logs once a day per coin+signal, re-prices at +1h/+24h/+72h, gone = -1, summary vs control", async () => {
+  const ES = T.ES, kv = fakeKV(), H = 3_600_000, t0 = Date.UTC(2026, 9, 21);
+  const px = (m) => ({ price: 1, liq: 5000 });
+  await ES.log(kv, [{ mint: "A", sig: "dev_sold_out", price: px() }, { mint: "B", sig: "dev_holds", price: px() }], t0);
+  assert.equal(await ES.log(kv, [{ mint: "A", sig: "dev_sold_out", price: px() }], t0 + H), 0, "deduped within 24h");
+  const later = { A: [0.5, 0.2, 0], B: [1.1, 1.2, 1.3] };       // A collapses and disappears, B rises
+  const at = (k) => async (mints) => Object.fromEntries(mints.map((m) => [m, later[m][k] ? { price: later[m][k], liq: later[m][k] ? 5000 : 0 } : { price: 0, liq: 0 }]));
+  assert.equal((await ES.followUp(kv, t0 + 30 * 60_000, at(0))).priced, 0, "nothing due before 1h");
+  await ES.followUp(kv, t0 + 1 * H + 1, at(0));
+  await ES.followUp(kv, t0 + 24 * H + 1, at(1));
+  const r = await ES.followUp(kv, t0 + 72 * H + 1, at(2));
+  assert.equal(r.done, 2); assert.equal(r.pending, 0);
+  const s = (await ES.report(kv)).results;
+  assert.equal(s.dev_sold_out["1h"].median, -0.5); assert.equal(s.dev_sold_out["72h"].gone, 1);
+  assert.equal(s.dev_holds["72h"].median, 0.3);
+});

@@ -2,6 +2,7 @@
 // alerts). Feeds the daily channel digest and the /rugs page, and is the start of a rug-outcome dataset.
 // Stored per UTC day in one KV key; no user ids, only public on-chain facts.
 import type { Assessment } from "./risk";
+import * as ES from "./eventstudy";
 
 export type RugEvent = { at: string; mint: string; level: string; score: number; flags: string[]; src: "check" | "guard" | "watch"; alerts?: string[] };
 
@@ -31,6 +32,7 @@ export async function record(kv: KVNamespace, a: Assessment, src: RugEvent["src"
   list.push({ at: new Date(now).toISOString(), mint: a.mint, level: a.level, score: a.score,
               flags: a.checks.filter((c) => !c.ok && c.id !== "mutable_metadata").map((c) => c.id), src, ...(alerts ? { alerts } : {}) });
   await kv.put(key(d), JSON.stringify(list), { expirationTtl: 400 * 86_400 });
+  await ES.log(kv, [{ mint: a.mint, sig: src === "watch" ? "watch_alert" : a.level === "critical" ? "risk_critical" : "risk_high" }], now).catch(() => 0);
   return true;
 }
 

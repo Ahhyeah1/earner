@@ -4,6 +4,7 @@
 // community may (voluntarily) include the agent's wallet in the coin's fee split - pump.fun's fee sharing then
 // pays it on-chain automatically. No DMs, no outreach: communities find the board themselves.
 import * as PF from "./pumpfees";
+import * as ES from "./eventstudy";
 
 export type Social = { type: string; url: string };
 export type Rec = {
@@ -147,6 +148,16 @@ export async function run(kv: KVNamespace, url: string, notify?: (title: string,
   const keep = Object.values(s.board).sort((a, b) => b.analyzedAt.localeCompare(a.analyzedAt)).slice(0, BOARD_MAX);
   s.board = Object.fromEntries(keep.map((r) => [r.mint, r]));
   await kv.put(KEY, JSON.stringify(s));
+  try {      // event study: dev sold out vs dev still holds (control), abandoned
+    const items: { mint: string; sig: ES.Signal; extra: Record<string, number> }[] = [];
+    for (const r of done.filter((x) => x.verdict !== "shared" && x.verdict !== "skip" && x.devHolds !== null)) {
+      const extra = { ageDays: Math.round((r.ageDays ?? -1) * 10) / 10, vol24h: Math.round(r.volume24h) };
+      items.push({ mint: r.mint, sig: r.devHolds ? "dev_holds" : "dev_sold_out", extra });
+      if (r.verdict === "abandoned") items.push({ mint: r.mint, sig: "abandoned", extra });
+    }
+    await ES.log(kv, items, now);
+    await ES.followUp(kv, now);
+  } catch { /* research must never break the scanner */ }
   return { analyzed: done.length, queue: s.queue.length, board: keep.length, abandoned: keep.filter((r) => r.verdict === "abandoned").length };
 }
 

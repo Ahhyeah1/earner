@@ -27,6 +27,7 @@ import * as R from "./royalty";
 import * as LR from "./lossreport";
 import * as AD from "./agentdata";
 import * as SW from "./swap";
+import * as ES from "./eventstudy";
 import { PAGE as LOSSES_PAGE } from "./losses_page";
 import { run as runWatches } from "./watch";
 import { svmPaywall } from "@x402/paywall/svm";
@@ -175,6 +176,7 @@ app.get("/graveyard/icon.svg", () => new Response(`<svg xmlns="http://www.w3.org
 app.get("/graveyard", (c) => c.redirect(G.dialLink(BASE)));
 // Royalty Hunter: board of abandoned pump.fun coins + evidence packs for CTO creator-fee applications.
 app.get("/royalties", async (c) => c.html(R.boardPage(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300" }));
+app.get("/research/events.json", async (c) => c.json(await ES.report(c.env.FEED), 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/fees", async (c) => c.html(R.feesPage(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300" }));
 app.get("/fees.json", async (c) => c.json(R.feeStats(await R.board(c.env.FEED)), 200, { "Cache-Control": "public, max-age=300", "access-control-allow-origin": "*" }));
 app.get("/royalties.json", async (c) => c.json({ note: "Automated on-chain facts; 'abandoned' is an inference, not an accusation.",
