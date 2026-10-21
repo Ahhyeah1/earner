@@ -418,3 +418,12 @@ test("event study: logs once a day per coin+signal, re-prices at +1h/+24h/+72h, 
   assert.equal(s.dev_sold_out["1h"].median, -0.5); assert.equal(s.dev_sold_out["72h"].gone, 1);
   assert.equal(s.dev_holds["72h"].median, 0.3);
 });
+
+test("event study: unpriced signals get their price (and t0) from the cron; no market -> dropped", async () => {
+  const ES = T.ES, kv = fakeKV(), t0 = Date.UTC(2026, 9, 21), H = 3_600_000;
+  await ES.log(kv, [{ mint: "A", sig: "dev_sold_out" }, { mint: "Z", sig: "risk_high" }], t0);
+  const r = await ES.followUp(kv, t0 + 5 * 60_000, async () => ({ A: { price: 2, liq: 5000 } }));
+  assert.equal(r.pending, 1, "Z had no market and was dropped");
+  await ES.followUp(kv, t0 + 5 * 60_000 + H + 1, async () => ({ A: { price: 1, liq: 5000 } }));
+  assert.equal((await ES.report(kv)).results.dev_sold_out["1h"].median, -0.5);
+});

@@ -155,8 +155,7 @@ export async function run(kv: KVNamespace, url: string, notify?: (title: string,
       items.push({ mint: r.mint, sig: r.devHolds ? "dev_holds" : "dev_sold_out", extra });
       if (r.verdict === "abandoned") items.push({ mint: r.mint, sig: "abandoned", extra });
     }
-    await ES.log(kv, items, now);
-    await ES.followUp(kv, now);
+    await ES.log(kv, items, now);           // priced by the event-study cron (its own request budget)
   } catch { /* research must never break the scanner */ }
   return { analyzed: done.length, queue: s.queue.length, board: keep.length, abandoned: keep.filter((r) => r.verdict === "abandoned").length };
 }

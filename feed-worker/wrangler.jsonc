@@ -16,7 +16,7 @@
   },
   // Watchtower re-checks every 15 minutes (src/watch.ts); daily rug-radar channel post at 18:00 UTC;
   // Royalty Hunter scans a few pump.fun coins every 15 minutes, offset (src/royalty.ts)
-  "triggers": { "crons": ["*/15 * * * *", "0 18 * * *", "7,22,37,52 * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *", "0 18 * * *", "7,22,37,52 * * * *", "11,26,41,56 * * * *"] },
   "kv_namespaces": [
     // Created by `npm run setup` (scripts/setup.ps1); the id is filled in there.
     { "binding": "FEED", "id": "9780b8ddca354129a6c859a81a1d8340" }

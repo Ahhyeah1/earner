@@ -503,12 +503,14 @@ export async function postDigest(env: Bindings) {
 }
 
 export const ROYALTY_CRON = "7,22,37,52 * * * *";   // own invocation: its own outbound-request budget
+export const STUDY_CRON = "11,26,41,56 * * * *";    // event study: price new signals + follow-ups
 
 // Crons: every 15 min the Watchtower re-checks watched tokens (and, offset, Royalty Hunter scans a few coins);
 // once a day the rug radar is posted.
 export default {
   fetch: app.fetch,
   async scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext) {
+    if (event.cron === STUDY_CRON) return void ctx.waitUntil(ES.followUp(env.FEED).catch(() => {}));
     if (event.cron === ROYALTY_CRON) {
       return void ctx.waitUntil(R.run(env.FEED, env.SOLANA_RPC || "https://api.mainnet-beta.solana.com", env.NTFY_TOPIC
         ? (title, body) => fetch(`https://ntfy.sh/${env.NTFY_TOPIC}`, { method: "POST", body, headers: { Title: title, Tags: "crown" } })
